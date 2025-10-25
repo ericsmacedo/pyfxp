@@ -19,23 +19,39 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-"""pyfxp package."""
+"""Generates reference data for tests."""
 
-from ._pyfxp import fxp
-from .constants import AWAY, CEIL, ERROR, HALF_AWAY, HALF_DOWN, HALF_EVEN, HALF_UP, HALF_ZERO, SAT, TO_ZERO, TRUNC, WRAP
+from itertools import product
+from pathlib import Path
 
-__all__ = [
-    "AWAY",
-    "CEIL",
-    "ERROR",
-    "HALF_AWAY",
-    "HALF_DOWN",
-    "HALF_EVEN",
-    "HALF_UP",
-    "HALF_ZERO",
-    "SAT",
-    "TO_ZERO",
-    "TRUNC",
-    "WRAP",
-    "fxp",
-]
+import numpy as np
+
+from pyfxp import fxp
+from pyfxp.constants import rounding_modes
+
+PRJ_PATH = Path(__file__).parent.parent
+
+
+def gen_ref():
+    """Generate reference data for tests."""
+    n_smp = 2**8
+
+    rng = np.random.default_rng()  # Create a Generator instance
+    w = rng.integers(low=1, high=16, size=n_smp)
+    qf = rng.integers(low=0, high=8, size=n_smp)
+    qi = w - qf
+    x = rng.normal(loc=0, scale=60, size=n_smp)
+    fxp_args = list(product(rounding_modes.values(), [0, 1], [True, False]))
+
+    ref_file = ""
+    for i in range(n_smp):
+        for rnd_method, ovf_method, signed in fxp_args:
+            out = fxp(x[i], qi=qi[i], qf=qf[i], rnd_method=rnd_method, ovf_method=ovf_method, signed=signed)
+            ref_file += f"{x[i]}, {qi[i]}, {qf[i]}, {rnd_method}, {ovf_method}, {signed}, {out}\n"
+
+    output_path = PRJ_PATH / "tests" / "test_data.txt"
+    output_path.write_text(ref_file)
+
+
+if __name__ == "__main__":
+    gen_ref()

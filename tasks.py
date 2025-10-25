@@ -22,15 +22,12 @@
 
 """invoke tasks.py file."""
 
+import os
 import platform
 from pathlib import Path
 
 from colorama import init
 from invoke import task
-
-ENV = "uv run --frozen --"
-PYTEST_OPTIONS = ""
-
 
 # Initialize colorama so ANSI codes work on Windows too
 init(autoreset=True)
@@ -53,6 +50,7 @@ def run_cmd(c, cmd, force_color=False):
         elif "ruff" in cmd and "--color" not in cmd:
             cmd += " --color always"
 
+    print(cmd)
     if is_windows:
         c.run(cmd)
     else:
@@ -69,7 +67,16 @@ def pre_commit(c):
 @task
 def test(c):
     """[All] Run Unittests via pytest."""
-    run_cmd(c, f"{ENV} pytest -vv {PYTEST_OPTIONS}", force_color=True)
+
+    run_cmd(c, f"rm -rf .coverage", force_color=True)
+
+    run_cmd(
+        c,
+        f"{ENV} pytest -vv {PYTEST_OPTIONS} --cov --cov-append --no-cov-on-fail tests/test_scalar_vs_array.py",
+        force_color=True,
+    )
+    os.environ["NUMBA_DISABLE_JIT"] = "1"
+    run_cmd(c, f"{ENV} pytest -vv {PYTEST_OPTIONS} --cov --cov-append --no-cov-on-fail", force_color=True)
     print(f"See coverage report:\n\n    file://{Path.cwd()}/htmlcov/index.html\n")
 
 
