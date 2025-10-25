@@ -20,4 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""pyfxp package."""
+
+def test_hello_world():
+    """Hello word test."""
+
+    assert 1 == 1
