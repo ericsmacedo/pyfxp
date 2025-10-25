@@ -41,29 +41,29 @@ from pyfxp.constants import (
 )
 
 
-def _fxp_arr(a, qi, qf, signed, rnd_method, ovf_method):  # noqa: PLR0913
-    return fxp(a, qi, qf, signed, rnd_method, ovf_method)
+def _fxp_arr(a, qi, qf, signed, rnd, ovf):  # noqa: PLR0913
+    return fxp(a, qi, qf, signed, rnd, ovf)
 
 
-def _fxp_scalar(a, qi, qf, signed, rnd_method, ovf_method):  # noqa: PLR0913
+def _fxp_scalar(a, qi, qf, signed, rnd, ovf):  # noqa: PLR0913
     n = len(a)
     out = np.zeros(n)
     for i in range(n):
-        out[i] = fxp(a[i], qi, qf, signed=signed, rnd_method=rnd_method, ovf_method=ovf_method)
+        out[i] = fxp(a[i], qi, qf, signed=signed, rnd=rnd, ovf=ovf)
     return out
 
 
 @njit
-def _fxp_arr_njit(a, qi, qf, signed, rnd_method, ovf_method):  # noqa: PLR0913
-    return fxp(a, qi, qf, signed=signed, rnd_method=rnd_method, ovf_method=ovf_method)
+def _fxp_arr_njit(a, qi, qf, signed, rnd, ovf):  # noqa: PLR0913
+    return fxp(a, qi, qf, signed=signed, rnd=rnd, ovf=ovf)
 
 
 @njit
-def _fxp_scalar_njit(a, qi, qf, signed, rnd_method, ovf_method):  # noqa: PLR0913
+def _fxp_scalar_njit(a, qi, qf, signed, rnd, ovf):  # noqa: PLR0913
     n = len(a)
     out = np.zeros(n)
     for i in range(n):
-        out[i] = fxp(a[i], qi, qf, signed=signed, rnd_method=rnd_method, ovf_method=ovf_method)
+        out[i] = fxp(a[i], qi, qf, signed=signed, rnd=rnd, ovf=ovf)
     return out
 
 
@@ -79,35 +79,31 @@ SCALAR_NJIT = [True, False]
 
 @pytest.mark.parametrize("qi", QI_VALUES)
 @pytest.mark.parametrize("qf", QF_VALUES)
-@pytest.mark.parametrize("rnd_method", ROUNDING_METHODS)
-@pytest.mark.parametrize("ovf_method", OVERFLOW_METHODS)
+@pytest.mark.parametrize("rnd", ROUNDING_METHODS)
+@pytest.mark.parametrize("ovf", OVERFLOW_METHODS)
 @pytest.mark.parametrize("signed", SIGNED)
 @pytest.mark.parametrize("arr_njit", ARR_NJIT)
 @pytest.mark.parametrize("scalar_njit", SCALAR_NJIT)
-def test_array_vs_scalar_consistency(qi, qf, rnd_method, ovf_method, signed, arr_njit, scalar_njit):  # noqa: PLR0913
+def test_array_vs_scalar_consistency(qi, qf, rnd, ovf, signed, arr_njit, scalar_njit):  # noqa: PLR0913
     """Test that array and scalar implementations produce identical results."""
     rng = np.random.default_rng()  # Create a Generator instance
     test_data = rng.uniform(low=-1000.0, high=1000.0, size=2**4)
 
     # Array implementation
     if arr_njit:
-        arr_result = _fxp_arr_njit(test_data, qi=qi, qf=qf, signed=signed, rnd_method=rnd_method, ovf_method=ovf_method)
+        arr_result = _fxp_arr_njit(test_data, qi=qi, qf=qf, signed=signed, rnd=rnd, ovf=ovf)
     else:
-        arr_result = _fxp_arr(test_data, qi=qi, qf=qf, signed=signed, rnd_method=rnd_method, ovf_method=ovf_method)
+        arr_result = _fxp_arr(test_data, qi=qi, qf=qf, signed=signed, rnd=rnd, ovf=ovf)
 
     if scalar_njit:
-        scalar_result = _fxp_scalar_njit(
-            test_data, qi=qi, qf=qf, signed=signed, rnd_method=rnd_method, ovf_method=ovf_method
-        )
+        scalar_result = _fxp_scalar_njit(test_data, qi=qi, qf=qf, signed=signed, rnd=rnd, ovf=ovf)
     else:
-        scalar_result = _fxp_scalar(
-            test_data, qi=qi, qf=qf, signed=signed, rnd_method=rnd_method, ovf_method=ovf_method
-        )
+        scalar_result = _fxp_scalar(test_data, qi=qi, qf=qf, signed=signed, rnd=rnd, ovf=ovf)
 
     # Compare results
     assert np.array_equal(arr_result, scalar_result), (
         f"Inconsistent results for Q{qi}.{qf} with "
-        f"rnd={rnd_method}, ovf={ovf_method}\n"
+        f"rnd={rnd}, ovf={ovf}\n"
         f"Input: {test_data}\n"
         f"Array result: {arr_result}\n"
         f"Scalar result: {scalar_result}"

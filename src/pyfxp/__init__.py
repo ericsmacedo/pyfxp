@@ -21,7 +21,7 @@
 # SOFTWARE.
 """pyfxp package."""
 
-from ._pyfxp import fxp
+from ._pyfxp import fxp, fxpt, Q, FxpSpec
 from .constants import AWAY, CEIL, ERROR, HALF_AWAY, HALF_DOWN, HALF_EVEN, HALF_UP, HALF_ZERO, SAT, TO_ZERO, TRUNC, WRAP
 
 __all__ = [
@@ -38,4 +38,7 @@ __all__ = [
     "TRUNC",
     "WRAP",
     "fxp",
+    "fxpt",
+    "Q",
+    "FxpSpec",
 ]

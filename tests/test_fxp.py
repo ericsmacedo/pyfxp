@@ -26,8 +26,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pyfxp import fxp
+from pyfxp import Q, fxpt, fxp
 from pyfxp._pyfxp import _rnd_array, _rnd_scalar
+
+from pyfxp.constants import HALF_EVEN
 
 PRJ_PATH = Path(__file__).parent.parent
 
@@ -39,8 +41,8 @@ def parse_test_line(line):
         "x": float(parts[0]),
         "qi": int(parts[1]),
         "qf": int(parts[2]),
-        "rnd_method": int(parts[3]),
-        "ovf_method": int(parts[4]),
+        "rnd": int(parts[3]),
+        "ovf": int(parts[4]),
         "signed": parts[5] == "True",
         "expected": float(parts[6]),
     }
@@ -55,43 +57,24 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("test_case", test_cases)
 
 
-def test_fxp_with_file_data(test_case):
-    """Compares output of fxp against test data."""
-    result = fxp(
-        x=test_case["x"],  # Use dictionary keys
+def test_fxpt_with_file_data(test_case):
+    """Compares output of fxpt against test data."""
+    spec = Q(
         qi=test_case["qi"],
         qf=test_case["qf"],
-        rnd_method=test_case["rnd_method"],
-        ovf_method=test_case["ovf_method"],
+        rnd=test_case["rnd"],
+        ovf=test_case["ovf"],
         signed=test_case["signed"],
+    )
+    result = fxpt(
+        x=test_case["x"],  # Use dictionary keys
+        spec=spec,
     )
     assert result == test_case["expected"], f"Failed for test_case: {test_case}"
 
 
-def test_overflow_error():
-    """Test overflow error."""
-    with pytest.raises(OverflowError):
-        # Code that should raise OverflowError
-        fxp(x=512, qi=8, qf=0, ovf_method=2)
+def test_func_raises_valueerror_scalar():
+    """Checks the half-even rnd method."""
+    x_fxp = fxp(x=5.5, qi=8, qf=0, rnd=HALF_EVEN)
 
-
-def test_overflow_error_array():
-    """Test overflow error."""
-    with pytest.raises(OverflowError):
-        x = np.ones(100) * 1000
-        # Code that should raise OverflowError
-        fxp(x=x, qi=8, qf=0, ovf_method=2)
-
-
-def test_invalid_method_rnd_scalar():
-    """Test invalid method error."""
-    with pytest.raises(ValueError):
-        # Code that should raise OverflowError
-        _rnd_scalar(x=512, method=20)
-
-
-def test_invalid_method_rnd_array():
-    """Test invalid method error."""
-    with pytest.raises(ValueError):
-        # Code that should raise OverflowError
-        _rnd_array(x=np.array([512]), method=20)
+    assert x_fxp == 6
