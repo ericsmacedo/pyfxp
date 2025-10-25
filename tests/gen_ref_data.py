@@ -37,8 +37,8 @@ def gen_ref():
     n_smp = 2**8
 
     rng = np.random.default_rng()  # Create a Generator instance
-    w = rng.randint(low=1, high=16, size=n_smp)  # type: ignore
-    qf = rng.randint(low=0, high=8, size=n_smp)  # type: ignore
+    w = rng.integers(low=1, high=16, size=n_smp)
+    qf = rng.integers(low=0, high=8, size=n_smp)
     qi = w - qf
     x = rng.normal(loc=0, scale=60, size=n_smp)
     fxp_args = list(product(rounding_modes.values(), [0, 1], [True, False]))
