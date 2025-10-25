@@ -19,9 +19,39 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+"""Generates reference data for tests."""
+
+from itertools import product
+from pathlib import Path
+
+import numpy as np
+
+from pyfxp import fxp
+from pyfxp.constants import rounding_modes
+
+PRJ_PATH = Path(__file__).parent.parent
 
 
-def test_hello_world():
-    """Hello word test."""
+def gen_ref():
+    """Generate reference data for tests."""
+    n_smp = 2**8
 
-    assert 1 == 1
+    rng = np.random.default_rng()  # Create a Generator instance
+    w = rng.randint(low=1, high=16, size=n_smp)  # type: ignore
+    qf = rng.randint(low=0, high=8, size=n_smp)  # type: ignore
+    qi = w - qf
+    x = rng.normal(loc=0, scale=60, size=n_smp)
+    fxp_args = list(product(rounding_modes.values(), [0, 1], [True, False]))
+
+    ref_file = ""
+    for i in range(n_smp):
+        for rnd_method, ovf_method, signed in fxp_args:
+            out = fxp(x[i], qi=qi[i], qf=qf[i], rnd_method=rnd_method, ovf_method=ovf_method, signed=signed)
+            ref_file += f"{x[i]}, {qi[i]}, {qf[i]}, {rnd_method}, {ovf_method}, {signed}, {out}\n"
+
+    output_path = PRJ_PATH / "tests" / "test_data.txt"
+    output_path.write_text(ref_file)
+
+
+if __name__ == "__main__":
+    gen_ref()

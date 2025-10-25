@@ -19,23 +19,41 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-"""pyfxp package."""
 
-from ._pyfxp import fxp
-from .constants import AWAY, CEIL, ERROR, HALF_AWAY, HALF_DOWN, HALF_EVEN, HALF_UP, HALF_ZERO, SAT, TO_ZERO, TRUNC, WRAP
+"""Rounding method constants for use with Numba-optimized functions."""
 
-__all__ = [
-    "AWAY",
-    "CEIL",
-    "ERROR",
-    "HALF_AWAY",
-    "HALF_DOWN",
-    "HALF_EVEN",
-    "HALF_UP",
-    "HALF_ZERO",
-    "SAT",
-    "TO_ZERO",
-    "TRUNC",
-    "WRAP",
-    "fxp",
-]
+# Integer codes (for Numba performance)
+TRUNC = 0
+CEIL = 1
+TO_ZERO = 2
+AWAY = 3
+HALF_UP = 4
+HALF_DOWN = 5
+HALF_EVEN = 6
+HALF_ZERO = 7
+HALF_AWAY = 8
+
+WRAP = 0
+SAT = 1
+ERROR = 2
+
+rounding_modes = {
+    "TRUNC": TRUNC,
+    "CEIL": CEIL,
+    "TO_ZERO": TO_ZERO,
+    "AWAY": AWAY,
+    "HALF_UP": HALF_UP,
+    "HALF_DOWN": HALF_DOWN,
+    "HALF_EVEN": HALF_EVEN,
+    "HALF_ZERO": HALF_ZERO,
+    "HALF_AWAY": HALF_AWAY,
+}
+
+overflow_modes = {
+    "WRAP": WRAP,
+    "SAT": SAT,
+    "ERROR": ERROR,
+}
+
+rounding_modes_inv = {v: k for k, v in rounding_modes.items()}
+overflow_modes_inv = {v: k for k, v in overflow_modes.items()}
