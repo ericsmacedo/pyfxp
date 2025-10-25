@@ -22,6 +22,7 @@
 
 """invoke tasks.py file."""
 
+import os
 import platform
 from pathlib import Path
 
@@ -68,16 +69,14 @@ def test(c):
     """[All] Run Unittests via pytest."""
 
     run_cmd(c, f"rm -rf .coverage", force_color=True)
-    run_cmd(
-        c,
-        f"NUMBA_DISABLE_JIT=1 {ENV} pytest -vv {PYTEST_OPTIONS} --cov --cov-append --no-cov-on-fail",
-        force_color=True,
-    )
+
     run_cmd(
         c,
         f"{ENV} pytest -vv {PYTEST_OPTIONS} --cov --cov-append --no-cov-on-fail tests/test_scalar_vs_array.py",
         force_color=True,
     )
+    os.environ["NUMBA_DISABLE_JIT"] = "1"
+    run_cmd(c, f"{ENV} pytest -vv {PYTEST_OPTIONS} --cov --cov-append --no-cov-on-fail", force_color=True)
     print(f"See coverage report:\n\n    file://{Path.cwd()}/htmlcov/index.html\n")
 
 
