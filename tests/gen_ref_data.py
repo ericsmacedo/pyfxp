@@ -45,9 +45,9 @@ def gen_ref():
 
     ref_file = ""
     for i in range(n_smp):
-        for rnd_method, ovf_method, signed in fxp_args:
-            out = fxp(x[i], qi=qi[i], qf=qf[i], rnd_method=rnd_method, ovf_method=ovf_method, signed=signed)
-            ref_file += f"{x[i]}, {qi[i]}, {qf[i]}, {rnd_method}, {ovf_method}, {signed}, {out}\n"
+        for rnd, ovf, signed in fxp_args:
+            out = fxp(x[i], qi=qi[i], qf=qf[i], rnd=rnd, ovf=ovf, signed=signed)
+            ref_file += f"{x[i]}, {qi[i]}, {qf[i]}, {rnd}, {ovf}, {signed}, {out}\n"
 
     output_path = PRJ_PATH / "tests" / "test_data.txt"
     output_path.write_text(ref_file)
