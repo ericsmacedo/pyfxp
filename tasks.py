@@ -88,7 +88,7 @@ def checktypes(c):
 
 @task
 def doc(c):
-    """[All] Build Documentation via mkdocs."""
+    """Build Documentation via mkdocs."""
     run_cmd(c, f"{ENV} mkdocs build --strict", force_color=True)
 
 
@@ -110,7 +110,7 @@ def distclean(c):
     run_cmd(c, "git clean -xdf", force_color=True)
 
 
-@task(pre=[pre_commit, test, checktypes, doc])
+@task(pre=[pre_commit, test, checktypes])
 def all(c):  # noqa: ARG001
     """Do everything tagged with [ALL]."""
     print("\n    PASS\n")
