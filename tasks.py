@@ -1,0 +1,87 @@
+"""invoke tasks.py file."""
+
+import platform
+from pathlib import Path
+
+from colorama import init
+from invoke import task
+
+ENV = "uv run --frozen --"
+PYTEST_OPTIONS = ""
+
+
+# Initialize colorama so ANSI codes work on Windows too
+init(autoreset=True)
+
+ENV = "uv run --frozen --"
+PYTEST_OPTIONS = ""
+is_windows = platform.system() == "Windows"
+
+
+def run_cmd(c, cmd, force_color=False):
+    """Run a command with cross-platform color handling.
+
+    On Linux/macOS, uses pty=True for proper color passthrough.
+    On Windows, avoids pty and optionally forces --color flags.
+    """
+    if force_color:
+        # Try to enforce colors if the tool supports it
+        if "pytest" in cmd and "--color" not in cmd:
+            cmd += " --color=yes"
+        elif "ruff" in cmd and "--color" not in cmd:
+            cmd += " --color always"
+
+    if is_windows:
+        c.run(cmd)
+    else:
+        c.run(cmd, pty=True)
+
+
+@task
+def pre_commit(c):
+    """[All] Run 'pre-commit' on all files."""
+    run_cmd(c, f"{ENV} pre-commit install --install-hooks", force_color=True)
+    run_cmd(c, f"{ENV} pre-commit run --all-files", force_color=True)
+
+
+@task
+def test(c):
+    """[All] Run Unittests via pytest."""
+    run_cmd(c, f"{ENV} pytest -vv {PYTEST_OPTIONS}", force_color=True)
+    print(f"See coverage report:\n\n    file://{Path.cwd()}/htmlcov/index.html\n")
+
+
+@task
+def checktypes(c):
+    """[All] Run Type-Checking via mypy."""
+    run_cmd(c, f"{ENV} ty check", force_color=True)
+
+
+@task
+def doc(c):
+    """[All] Build Documentation via mkdocs."""
+    run_cmd(c, f"{ENV} mkdocs build --strict", force_color=True)
+
+
+@task
+def doc_serve(c):
+    """Start Local Documentation Server via mkdocs."""
+    run_cmd(c, f"{ENV} mkdocs serve --no-strict", force_color=True)
+
+
+@task
+def clean(c):
+    """Remove everything mentioned by .gitignore file."""
+    run_cmd(c, "git clean -xdf", force_color=True)
+
+
+@task
+def distclean(c):
+    """Remove everything mentioned by .gitignore file and UNTRACKED files."""
+    run_cmd(c, "git clean -xdf", force_color=True)
+
+
+@task(pre=[pre_commit, test, checktypes, doc])
+def all(c):  # noqa: ARG001
+    """Do everything tagged with [ALL]."""
+    print("\n    PASS\n")

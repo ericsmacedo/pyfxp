@@ -1,0 +1,109 @@
+
+[project]
+name = "pyfxp"
+dynamic = ["version"]
+description = "Python fixed-point library.."
+readme = "README.md"
+authors = [
+    {name = "Eric Macedo", email = "ericsmacedo@gmail.com"},
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.10.0,<4.0"
+dependencies = [
+]
+keywords = []
+
+[project.urls]
+"Homepage" = "https://github.com/ericsmacedo/pyfxp"
+"Documentation" = "https://pyfxp.readthedocs.io/en/stable/"
+"Bug Tracker" = "https://github.com/ericsmacedo/pyfxp/issues"
+
+[dependency-groups]
+dev = [
+    "contextlib-chdir>=1.0.2",
+    "coveralls>=3.3.1",
+    "invoke>=2.2.0",
+    "mkdocs-click>=0.8.1",
+    "mkdocs-include-markdown-plugin>=6.0.5",
+    "mkdocs-literate-nav>=0.6.1",
+    "mkdocs-material>=9.5.18",
+    "mkdocstrings-python>=1.9.2",
+    "pre-commit>=4.1.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.11.2",
+    "ty>=0.0.1a22",
+]
+
+[project.scripts]
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm.build]
+includes = ["src/pyfxp"]
+
+[tool.pdm.version]
+source = "scm"
+fallback_version = "0.0.0"
+
+[tool.ruff]
+line-length = 120
+fix = true
+target-version = "py310"
+
+[tool.ruff.lint]
+select = []
+ignore = []
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    # Magic Values
+    "PLR2004",
+    # Argument
+    "ARG001",
+    # Assert
+    "S101",
+    # Open is allowed
+    "PTH123",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+addopts ="""
+    --cov src/pyfxp
+    --cov-report term
+    --cov-report html
+    --doctest-glob=docs/*
+    --doctest-modules
+    --ignore-glob=tests/testdata/*
+    --log-level=INFO
+    --junitxml=report.xml
+"""
+filterwarnings = [
+    "error",
+]
+testpaths = ["tests"]       # Directories to search for tests
+
+[tool.coverage.run]
+omit = [
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    'return NotImplemented',
+    'raise NotImplementedError()',
+    'pragma: no cover',
+    'assert False',
+]
+
+
+[tool.ty.rules]
