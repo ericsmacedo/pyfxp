@@ -97,7 +97,7 @@ def doc(c):
 @task
 def doc_serve(c):
     """Start Local Documentation Server via mkdocs."""
-    run_cmd(c, f"{ENV} mkdocs serve --no-strict", force_color=True)
+    run_cmd(c, f"{ENV} mkdocs serve --strict", force_color=True)
 
 
 @task
@@ -112,7 +112,7 @@ def distclean(c):
     run_cmd(c, "git clean -xdf", force_color=True)
 
 
-@task(pre=[pre_commit, test, checktypes])
+@task(pre=[pre_commit, test, checktypes, doc])
 def all(c):  # noqa: ARG001
     """Do everything tagged with [ALL]."""
     print("\n    PASS\n")

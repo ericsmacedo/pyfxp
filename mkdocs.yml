@@ -28,10 +28,16 @@ theme:
 nav:
   - Home:
       - Welcome to pyfxp: index.md
-      - Contributing: contributing.md
       - Usage: usage.md
+      - Contributing: contributing.md
   - API:
-      - Overview: api.md
+      - Overview: api/api.md
+      - fixed-point functions:
+        - fxp: api/fxp.md
+        - fpxt: api/fxpt.md
+        - Q: api/Q.md
+        - FxpSpec: api/FxpSpec.md
+      - Constants: api/constants.md
 
 plugins:
   - search
@@ -45,6 +51,15 @@ plugins:
       handlers:
         python:
           options:
+            # Tables are generally too large, lists will fix this.
+            docstring_section_style: table
+            show_root_heading: true
+            parameter_headings: false
+            # Show the type of symbol (class, function, etc.) in the table of contents.
+            show_symbol_type_toc: true
+            # Render headings for type parameters too.
+            # type_parameter_headings: true
+            line_length: 88
             docstring_options:
               ignore_init_summary: true
             summary: true
@@ -55,12 +70,13 @@ plugins:
             show_docstring_other_parameters: true
             separate_signature: true
             signature_crossrefs: true
+            show_signature: true
             show_signature_annotations: false
             show_symbol_type_heading: true
             # preload_modules: [pydantic]
             inherited_members: false
             docstring_style: numpy
-          import:
+          inventories:
             - https://docs.python.org/3/objects.inv
 
 markdown_extensions:
@@ -78,4 +94,5 @@ markdown_extensions:
 
 watch:
   - src
+  - docs
   - CONTRIBUTING.md

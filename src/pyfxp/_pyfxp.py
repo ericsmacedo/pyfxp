@@ -33,6 +33,8 @@ RND_MIDPOINT = 0.5  # Threshold for half-way rounding
 
 
 class FxpSpec(NamedTuple):
+    """Fixed-point specification."""
+
     qi: int
     qf: int
     signed: bool
@@ -42,14 +44,17 @@ class FxpSpec(NamedTuple):
 
 @njit
 def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) -> FxpSpec:
-    """Convert a numeric value to fixed-point representation using Q-format notation.
+    """Create a fixed-point format specification using ARM-style Q-format notation.
+
+    The `Q` function defines a fixed-point representation by specifying
+    the number of integer and fractional bits, whether the format is signed,
+    and how rounding and overflow are handled. It returns an `FxpSpec` object
+    that can be passed to other functions (e.g., `fxp`) for actual numeric conversion.
 
     Parameters
     ----------
-    x : int, float or array-like
-        The input value(s) to convert.
     qi : int
-        Number of integer bits (excluding sign bit if signed=True).
+        Number of integer bits.
     qf : int
         Number of fractional bits.
     signed : bool, optional
@@ -59,58 +64,51 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) 
 
         Supported methods:
 
-        - TRUNC (0): Bit Truncation. Rounds towards negative infinity.
-        - CEIL (1): Round toward positive infinity.
-        - TO_ZERO (2): Round toward zero.
-        - AWAY (3): Round away from zero.
-        - HALF_UP (4): Round to nearest; ties round towards positive infinity.
-        - HALF_DOWN (5): Round to nearest; ties round toward negative infinity.
-        - HALF_EVEN (6): Round to nearest; ties round to even.
-        - HALF_ZERO (7): Round to nearest; ties round toward zero.
-        - HALF_AWAY (8): Round to nearest; ties round away from zero.
+        - TRUNC (0): Bit truncation (rounds toward negative infinity)
+        - CEIL (1): Round toward positive infinity
+        - TO_ZERO (2): Round toward zero
+        - AWAY (3): Round away from zero
+        - HALF_UP (4): Round to nearest; ties toward positive infinity
+        - HALF_DOWN (5): Round to nearest; ties toward negative infinity
+        - HALF_EVEN (6): Round to nearest; ties to even
+        - HALF_ZERO (7): Round to nearest; ties toward zero
+        - HALF_AWAY (8): Round to nearest; ties away from zero
 
     ovf : int, optional
         Overflow handling method (default is WRAP (0)).
 
         Supported methods:
 
-        - WRAP (0): Wrap around on overflow (modulo behavior).
-        - SAT (1): Saturate to maximum/minimum representable value.
-        - ERROR (2): Raise an error if overflow occurs.
+        - WRAP (0): Wrap around on overflow (modulo behavior)
+        - SAT (1): Saturate to maximum/minimum representable value
+        - ERROR (2): Raise an error if overflow occurs
 
-    Returns:
+    Returns
     -------
-    float or ndarray
-        Fixed-point representation of the input, as integer(s).
+    FxpSpec
+        A specification object describing the fixed-point format.
 
-    Notes:
+    Notes
     -----
-    Uses ARM-style Q-format notation where a Qm.n format has:
-        - m integer bits (qi)
-        - n fractional bits (qf)
-        - Optional sign bit if `signed` is True
+    This function uses ARM-style Q-format notation:
+
+    - `Qm.n` indicates `m` integer bits and `n` fractional bits (ARM style).
+    - The returned `FxpSpec` can be reused for consistent conversions across multiple values.
+
+    Examples
+    --------
+    >>> spec = Q(3, 1)  # Q3.5 format (3 integer bits, 5 fractional bits)
+    >>> spec.qi, spec.qf
+    (3, 1)
+    >>> fxp(1.25, spec)
+    1.0
     """
     return FxpSpec(qi, qf, signed, rnd, ovf)
 
 
-# --- usage ---
-# Q1_15  = Q(1, 15)            # signed by default
-# UQ0_8  = Q(0, 8, False)      # unsigned 0.8
-# Q3_12R = Q(3, 12, True, TRUNC, WRAP)
-
-
-# Option that uses simple tuples for the specs
-# @njit
-# def fxp(x, spec):
-#     qi, qf, signed, rnd, ovf = spec
-#     return fxpt(x, qi, qf, signed, rnd, ovf)
-
-
 @njit
 def fxp(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
-    """
-    Convert a numeric value to fixed-point representation using a pre-defined
-    fixed-point specification.
+    """Convert a numeric value to fixed-point representation using a pre-defined fixed-point specification.
 
     This function behaves like `fxpt`, but instead of requiring multiple
     arguments (`qi`, `qf`, `signed`, `rnd`, `ovf`), it accepts a single
@@ -125,30 +123,31 @@ def fxp(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
 
     spec : FxpSpec or tuple
         A fixed-point specification tuple or named tuple with the following fields:
-            - qi : int
-              Number of integer bits (excluding sign bit if `signed=True`).
-            - qf : int
-              Number of fractional bits.
-            - signed : bool
-              Whether the fixed-point format is signed.
-            - rnd : int
-              Rounding method to apply.
-              Supported methods (same as in `fxpt`):
-                  * TRUNC (0): Bit truncation; rounds toward negative infinity.
-                  * CEIL (1): Round toward positive infinity.
-                  * TO_ZERO (2): Round toward zero.
-                  * AWAY (3): Round away from zero.
-                  * HALF_UP (4): Round to nearest; ties toward +∞.
-                  * HALF_DOWN (5): Round to nearest; ties toward −∞.
-                  * HALF_EVEN (6): Round to nearest; ties to even.
-                  * HALF_ZERO (7): Round to nearest; ties toward zero.
-                  * HALF_AWAY (8): Round to nearest; ties away from zero.
-            - ovf : int
-              Overflow handling method.
-              Supported methods (same as in `fxpt`):
-                  * WRAP (0): Wrap around (modulo behavior).
-                  * SAT (1): Saturate to max/min representable value.
-                  * ERROR (2): Raise an error on overflow.
+
+        - qi : int
+          Number of integer bits (including sign bit if `signed=True`).
+        - qf : int
+          Number of fractional bits.
+        - signed : bool
+          Whether the fixed-point format is signed.
+        - rnd : int
+          Rounding method to apply.
+          Supported methods (same as in `fxpt`):
+              * TRUNC (0): Bit truncation; rounds toward negative infinity.
+              * CEIL (1): Round toward positive infinity.
+              * TO_ZERO (2): Round toward zero.
+              * AWAY (3): Round away from zero.
+              * HALF_UP (4): Round to nearest; ties toward positive infinity.
+              * HALF_DOWN (5): Round to nearest; ties toward negative infinity.
+              * HALF_EVEN (6): Round to nearest; ties to even.
+              * HALF_ZERO (7): Round to nearest; ties toward zero.
+              * HALF_AWAY (8): Round to nearest; ties away from zero.
+        - ovf : int
+          Overflow handling method.
+          Supported methods (same as in `fxpt`):
+              * WRAP (0): Wrap around.
+              * SAT (1): Saturate to max/min representable value.
+              * ERROR (2): Raise an error on overflow.
 
     Returns
     -------
@@ -161,11 +160,20 @@ def fxp(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
           >>> fxp(x, Q(qi, qf, signed, rnd, ovf))
           == fxpt(x, qi, qf, signed, rnd, ovf)
     - Uses ARM-style Q-format notation (Qm.n), where:
-        * m = `qi`  → number of integer bits
+        * m = `qi`  → number of integer bits (including signed bit if `signed=True`)
         * n = `qf`  → number of fractional bits
-        * Optional sign bit if `signed` is True
-    - Designed to be fully compatible with Numba `@njit` mode when `spec`
-      is a tuple or `NamedTuple` of primitive types.
+    - Designed to be fully compatible with Numba `@njit` mode
+
+    Examples
+    --------
+    >>> from pyfxp import Q, fxp
+    >>> from pyfxp.constants import TRUNC, WRAP
+    >>> import numpy as np
+    >>> np.pi
+    >>> 3.14159265358979
+    >>> Q3_4T = Q(3, 4, signed=True, rnd=TRUNC, ovf=WRAP)      # Q3.4 format (3 integer bits, 4 fractional bits)
+    >>> fxp(np.pi, Q3_4T)
+    3.125
     """
     return fxpt(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)
 
@@ -329,7 +337,7 @@ def fxpt(  # noqa: PLR0913
     x : int, float or array-like
         The input value(s) to convert.
     qi : int
-        Number of integer bits (excluding sign bit if signed=True).
+        Number of integer bits (including sign bit if signed=True).
     qf : int
         Number of fractional bits.
     signed : bool, optional
@@ -354,7 +362,7 @@ def fxpt(  # noqa: PLR0913
 
         Supported methods:
 
-        - WRAP (0): Wrap around on overflow (modulo behavior).
+        - WRAP (0): Wrap around on overflow.
         - SAT (1): Saturate to maximum/minimum representable value.
         - ERROR (2): Raise an error if overflow occurs.
 
@@ -366,9 +374,18 @@ def fxpt(  # noqa: PLR0913
     Notes:
     -----
     Uses ARM-style Q-format notation where a Qm.n format has:
-        - m integer bits (qi)
+        - m integer bits (qi) (including sign bit if signed=True)
         - n fractional bits (qf)
-        - Optional sign bit if `signed` is True
+
+    Examples
+    --------
+    >>> from pyfxp import fxpt
+    >>> from pyfxp.constants import TRUNC, WRAP
+    >>> import numpy as np
+    >>> np.pi
+    >>> 3.14159265358979
+    >>> fxpt(np.pi, 3, 4, signed=True, rnd=TRUNC, ovf=WRAP)  # Q3.4 format (3 integer bits, 4 fractional bits)
+    3.125
     """
     if isinstance(x, np.ndarray):
         return _fxpt_array(x, qi, qf, signed, rnd, ovf)
