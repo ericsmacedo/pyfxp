@@ -25,9 +25,9 @@ Key Features
 - Clear, expressive API ([fxp](docs/api/fxp.md), [fxpt](docs/api/fxpt.md), and [Q](docs/api/Q.md))
 - Configurable overflow & rounding modes (SAT, WRAP, HALF_EVEN, etc.)
 - Numba-compatible — ready for high-performance, JIT-compiled fixed-point operations.
+- Works with scalars and numpy arrays.
+- No need to work with a custom fixed-point data-type.
 - Perfect for DSP, control, and embedded algorithm prototyping.
-
-Bring deterministic, bit-true arithmetic to your Python code — with pyfxp.
 
 
 ## Installation
@@ -40,7 +40,7 @@ pip install pyfxp
 
 ## Quick Start
 
-`pyfxp` offers two ways to convert numbers to fixed-point:
+`pyfxp` offers two ways to convert numbers to a fixed-point format:
 
 - **[fxpt](https://pyfxp.readthedocs.io/en/latest/api/fxpt/)** → “typed” (parameter-based)
     Pass the format directly as function parameters.
@@ -48,9 +48,7 @@ pip install pyfxp
     Build a reusable spec with [`Q(...)`](https://pyfxp.readthedocs.io/en/latest/api/Q/), then pass that spec.
 
 
-### Parameter-based (fxpt)
-
-Use `fxpt` when the format is simple or ad-hoc.
+Use the `fxpt` function when the format is simple or used in a single place:
 
 ```python
 from pyfxp import fxpt
@@ -70,11 +68,10 @@ y = fxpt(
     In ARM-style Q-format notation (used by `pyfxp`), the **sign bit is included** in the integer bit count `qi`.
     Refer to [Q (number format)](https://en.wikipedia.org/wiki/Q_(number_format)) for more information.
 
----
 
-### Spec-based (fxp)
-
-Use `fxp` when you want a reusable, readable definition.
+Use `fxp` when you want a reusable, readable definition. The fixed-point format is defined
+using the [`Q(...)`](https://pyfxp.readthedocs.io/en/latest/api/Q/) function once, and can be
+reused for different `fxp` calls:
 
 ```python
 import numpy as np
@@ -89,16 +86,13 @@ y1 = fxp(3.14159, Q3_13)
 y2 = fxp(np.array([0.1, 0.2, 0.3]), Q3_13)
 ```
 
-[`Q(...)`](https://pyfxp.readthedocs.io/en/latest/api/Q/) returns an [FxpSpec](https://pyfxp.readthedocs.io/en/latest/api/FxpSpec/) instance (the explicit spec object used by fxp).
+[`Q(...)`](https://pyfxp.readthedocs.io/en/latest/api/Q/) returns an [FxpSpec](https://pyfxp.readthedocs.io/en/latest/api/FxpSpec/) instance
+which is basically a named tuple containing the specs used by `fxp`.
 
----
+When specifying the fixed-point specs using either `fxpt` or `Q`,
+all the following rounding and overflow modes are supported:
 
-### The [`pyfxp.constants`](https://pyfxp.readthedocs.io/en/latest/api/constants/) module
-
-The `constants` module defines named integer codes for rounding and overflow modes.
-They are used by both `fxpt` and `fxp` to specify fixed-point arithmetic behavior.
-
-#### Rounding modes
+**Rounding modes**:
 
 | Constant | Description |
 |-----------|--------------|
@@ -112,13 +106,16 @@ They are used by both `fxpt` and `fxp` to specify fixed-point arithmetic behavio
 | `HALF_ZERO` | Round to nearest; ties toward zero |
 | `HALF_AWAY` | Round to nearest; ties away from zero |
 
-#### Overflow modes
+**Overflow modes**:
 
 | Constant | Description |
 |-----------|--------------|
 | `WRAP` | Wrap around on overflow (modular arithmetic) |
 | `SAT` | Saturate at the maximum/minimum representable value |
 | `ERROR` | Raise an exception on overflow |
+
+The constants above are defined in the [`pyfxp.constants`](https://pyfxp.readthedocs.io/en/latest/api/constants/) module.
+They are used by both `fxpt` and `fxp` to specify fixed-point arithmetic behavior.
 
 !!! tip "Usage example"
     These constants are simple numeric codes — meant to be **readable and interoperable** with compiled or vectorized backends (e.g. Numba or C extensions).
