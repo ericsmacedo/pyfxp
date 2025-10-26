@@ -6,7 +6,6 @@
 [![python-versions](https://img.shields.io/pypi/pyversions/pyfxp.svg)](https://pypi.python.org/pypi/pyfxp)
 [![semantic-versioning](https://img.shields.io/badge/semver-2.0.0-green)](https://semver.org/)
 
-[![Downloads](https://img.shields.io/pypi/dm/pyfxp.svg?label=pypi%20downloads)](https://pypi.python.org/pypi/pyfxp)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request)
 [![Issues](https://img.shields.io/github/issues/ericsmacedo/pyfxp)](https://github.com/ericsmacedo/pyfxp/issues)
 

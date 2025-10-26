@@ -97,7 +97,7 @@ def doc(c):
 @task
 def doc_serve(c):
     """Start Local Documentation Server via mkdocs."""
-    run_cmd(c, f"{ENV} mkdocs serve --no-strict", force_color=True)
+    run_cmd(c, f"{ENV} mkdocs serve --strict", force_color=True)
 
 
 @task
