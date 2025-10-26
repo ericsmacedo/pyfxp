@@ -25,30 +25,40 @@
 import numpy as np
 import pytest
 
-from pyfxp import fxp
-from pyfxp._pyfxp import _rnd_array, _rnd_scalar
+from pyfxp import fxpt
+from numba import njit
+
+
+@njit
+def wrapper():
+    fxpt(x="string", qi=8, qf=0, ovf=2)  # type: ignore
 
 
 def test_func_raises_typeerror():
     with pytest.raises(TypeError, match=r"Unsupported type: .*"):
-        fxp(x="string", qi=8, qf=0, ovf=2)  # type: ignore
+        fxpt(x="string", qi=8, qf=0, ovf=2)  # type: ignore
+
+
+def test_func_raises_typeerror_numba():
+    with pytest.raises(TypeError, match=r"Unsupported type: .*"):
+        wrapper()
 
 
 def test_func_raises_valueerror_scalar():
     with pytest.raises(ValueError, match=r"invalid method: 20"):
-        fxp(x=5, qi=8, qf=0, ovf=20)
+        fxpt(x=5, qi=8, qf=0, ovf=20)
 
 
 def test_func_raises_valueerror_array():
     with pytest.raises(ValueError, match=r"invalid method: 20"):
-        fxp(x=np.arange(10), qi=8, qf=0, ovf=20)
+        fxpt(x=np.arange(10), qi=8, qf=0, ovf=20)
 
 
 def test_overflow_error():
     """Test overflow error."""
     with pytest.raises(OverflowError):
         # Code that should raise OverflowError
-        fxp(x=512, qi=8, qf=0, ovf=2)
+        fxpt(x=512, qi=8, qf=0, ovf=2)
 
 
 def test_overflow_error_array():
@@ -56,18 +66,18 @@ def test_overflow_error_array():
     with pytest.raises(OverflowError):
         x = np.ones(100) * 1000
         # Code that should raise OverflowError
-        fxp(x=x, qi=8, qf=0, ovf=2)
+        fxpt(x=x, qi=8, qf=0, ovf=2)
 
 
 def test_invalid_method_rnd_array():
     """Test invalid method error."""
     with pytest.raises(ValueError):
         # Code that should raise OverflowError
-        _rnd_array(x=np.array([512]), method=20)
+        fxpt(x=np.array([512]), qi=10, qf=0, rnd=20)
 
 
 def test_invalid_method_rnd_scalar():
     """Test invalid method error."""
     with pytest.raises(ValueError):
         # Code that should raise OverflowError
-        _rnd_scalar(x=512, method=20)
+        fxpt(x=512, qi=10, qf=0, rnd=20)

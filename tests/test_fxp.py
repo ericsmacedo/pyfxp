@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pyfxp import Q, fxpt, fxp
+from pyfxp import Q, fxp, fxpt
 from pyfxp._pyfxp import _rnd_array, _rnd_scalar
 
 from pyfxp.constants import HALF_EVEN
@@ -57,8 +57,8 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("test_case", test_cases)
 
 
-def test_fxpt_with_file_data(test_case):
-    """Compares output of fxpt against test data."""
+def test_fxp_temp_with_file_data(test_case):
+    """Compares output of fxp against test data."""
     spec = Q(
         qi=test_case["qi"],
         qf=test_case["qf"],
@@ -66,7 +66,7 @@ def test_fxpt_with_file_data(test_case):
         ovf=test_case["ovf"],
         signed=test_case["signed"],
     )
-    result = fxpt(
+    result = fxp(
         x=test_case["x"],  # Use dictionary keys
         spec=spec,
     )
@@ -75,6 +75,6 @@ def test_fxpt_with_file_data(test_case):
 
 def test_func_raises_valueerror_scalar():
     """Checks the half-even rnd method."""
-    x_fxp = fxp(x=5.5, qi=8, qf=0, rnd=HALF_EVEN)
+    x_fxp = fxpt(x=5.5, qi=8, qf=0, rnd=HALF_EVEN)
 
     assert x_fxp == 6
