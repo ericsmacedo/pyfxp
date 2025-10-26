@@ -96,8 +96,8 @@ filterwarnings = [
 testpaths = ["tests"]       # Directories to search for tests
 
 [tool.coverage.run]
-omit = [
-]
+source = ["src/pyfxp"]
+omit = ["tests/*"]
 
 [tool.coverage.report]
 exclude_lines = [
