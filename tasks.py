@@ -70,11 +70,13 @@ def test(c):
 
     run_cmd(c, f"rm -rf .coverage", force_color=True)
 
+    # check if code supports numba
     run_cmd(
         c,
-        f"{ENV} pytest -vv {PYTEST_OPTIONS} --cov --cov-append --no-cov-on-fail tests/test_scalar_vs_array.py",
+        f"{ENV} pytest -vv {PYTEST_OPTIONS} --cov --cov-append --no-cov-on-fail",
         force_color=True,
     )
+    # run with numba disabled to get coverage
     os.environ["NUMBA_DISABLE_JIT"] = "1"
     run_cmd(c, f"{ENV} pytest -vv {PYTEST_OPTIONS} --cov --cov-append --no-cov-on-fail", force_color=True)
     print(f"See coverage report:\n\n    file://{Path.cwd()}/htmlcov/index.html\n")

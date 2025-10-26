@@ -25,7 +25,7 @@ import numpy as np
 import pytest
 from numba import njit
 
-from pyfxp import fxp
+from pyfxp import fxpt
 from pyfxp.constants import (
     AWAY,
     CEIL,
@@ -42,20 +42,20 @@ from pyfxp.constants import (
 
 
 def _fxp_arr(a, qi, qf, signed, rnd, ovf):  # noqa: PLR0913
-    return fxp(a, qi, qf, signed, rnd, ovf)
+    return fxpt(a, qi, qf, signed, rnd, ovf)
 
 
 def _fxp_scalar(a, qi, qf, signed, rnd, ovf):  # noqa: PLR0913
     n = len(a)
     out = np.zeros(n)
     for i in range(n):
-        out[i] = fxp(a[i], qi, qf, signed=signed, rnd=rnd, ovf=ovf)
+        out[i] = fxpt(a[i], qi, qf, signed=signed, rnd=rnd, ovf=ovf)
     return out
 
 
 @njit
 def _fxp_arr_njit(a, qi, qf, signed, rnd, ovf):  # noqa: PLR0913
-    return fxp(a, qi, qf, signed=signed, rnd=rnd, ovf=ovf)
+    return fxpt(a, qi, qf, signed=signed, rnd=rnd, ovf=ovf)
 
 
 @njit
@@ -63,7 +63,7 @@ def _fxp_scalar_njit(a, qi, qf, signed, rnd, ovf):  # noqa: PLR0913
     n = len(a)
     out = np.zeros(n)
     for i in range(n):
-        out[i] = fxp(a[i], qi, qf, signed=signed, rnd=rnd, ovf=ovf)
+        out[i] = fxpt(a[i], qi, qf, signed=signed, rnd=rnd, ovf=ovf)
     return out
 
 

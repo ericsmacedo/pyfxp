@@ -101,18 +101,18 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) 
 
 # Option that uses simple tuples for the specs
 # @njit
-# def fxpt(x, spec):
+# def fxp(x, spec):
 #     qi, qf, signed, rnd, ovf = spec
-#     return fxp(x, qi, qf, signed, rnd, ovf)
+#     return fxpt(x, qi, qf, signed, rnd, ovf)
 
 
 @njit
-def fxpt(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
+def fxp(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
     """
     Convert a numeric value to fixed-point representation using a pre-defined
     fixed-point specification.
 
-    This function behaves like `fxp`, but instead of requiring multiple
+    This function behaves like `fxpt`, but instead of requiring multiple
     arguments (`qi`, `qf`, `signed`, `rnd`, `ovf`), it accepts a single
     `FxpSpec` named tuple (or tuple) that encapsulates all format parameters.
     This makes it easier to reuse and pass fixed-point type definitions in
@@ -133,7 +133,7 @@ def fxpt(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
               Whether the fixed-point format is signed.
             - rnd : int
               Rounding method to apply.
-              Supported methods (same as in `fxp`):
+              Supported methods (same as in `fxpt`):
                   * TRUNC (0): Bit truncation; rounds toward negative infinity.
                   * CEIL (1): Round toward positive infinity.
                   * TO_ZERO (2): Round toward zero.
@@ -145,7 +145,7 @@ def fxpt(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
                   * HALF_AWAY (8): Round to nearest; ties away from zero.
             - ovf : int
               Overflow handling method.
-              Supported methods (same as in `fxp`):
+              Supported methods (same as in `fxpt`):
                   * WRAP (0): Wrap around (modulo behavior).
                   * SAT (1): Saturate to max/min representable value.
                   * ERROR (2): Raise an error on overflow.
@@ -158,8 +158,8 @@ def fxpt(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
     Notes
     -----
     - Equivalent to:
-          >>> fxpt(x, Q(qi, qf, signed, rnd, ovf))
-          == fxp(x, qi, qf, signed, rnd, ovf)
+          >>> fxp(x, Q(qi, qf, signed, rnd, ovf))
+          == fxpt(x, qi, qf, signed, rnd, ovf)
     - Uses ARM-style Q-format notation (Qm.n), where:
         * m = `qi`  → number of integer bits
         * n = `qf`  → number of fractional bits
@@ -167,7 +167,7 @@ def fxpt(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
     - Designed to be fully compatible with Numba `@njit` mode when `spec`
       is a tuple or `NamedTuple` of primitive types.
     """
-    return fxp(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)
+    return fxpt(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)
 
 
 @njit
@@ -300,7 +300,7 @@ def _overflow_array(x, signed: bool = True, w: int = 16, method: int = WRAP):
 
 
 @njit
-def _fxp_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     x = x * 2.0**qf
 
     x = _rnd_array(x, method=rnd)
@@ -310,7 +310,7 @@ def _fxp_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  
 
 
 @njit
-def _fxp_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+def _fxpt_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     x *= 2.0**qf
 
     x = _rnd_scalar(x, method=rnd)
@@ -319,7 +319,7 @@ def _fxp_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP): 
     return x / 2.0**qf
 
 
-def fxp(  # noqa: PLR0913
+def fxpt(  # noqa: PLR0913
     x: float | np.ndarray, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP
 ) -> float | np.ndarray:
     """Convert a numeric value to fixed-point representation using Q-format notation.
@@ -371,29 +371,29 @@ def fxp(  # noqa: PLR0913
         - Optional sign bit if `signed` is True
     """
     if isinstance(x, np.ndarray):
-        return _fxp_array(x, qi, qf, signed, rnd, ovf)
+        return _fxpt_array(x, qi, qf, signed, rnd, ovf)
 
     if isinstance(x, float | int):
-        return _fxp_scalar(x, qi, qf, signed, rnd, ovf)
+        return _fxpt_scalar(x, qi, qf, signed, rnd, ovf)
 
     raise TypeError(f"Unsupported type: {x}")
 
 
 # Numba's overload is used to decide when to call the array or the scalar function.
-@overload(fxp)
+@overload(fxpt)
 def fxp_overload(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913, ARG001
     # Array case
     if isinstance(x, types.Array):
 
         def impl(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
-            return _fxp_array(x, qi, qf, signed, rnd, ovf)  # pragma: no cover
+            return _fxpt_array(x, qi, qf, signed, rnd, ovf)  # pragma: no cover
 
         return impl
 
     if isinstance(x, types.Integer | types.Float):
 
         def impl(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
-            return _fxp_scalar(x, qi, qf, signed, rnd, ovf)  # pragma: no cover
+            return _fxpt_scalar(x, qi, qf, signed, rnd, ovf)  # pragma: no cover
 
         return impl
     raise TypeError(f"Unsupported type: {x}")
