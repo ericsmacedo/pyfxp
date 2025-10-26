@@ -31,7 +31,6 @@ nav:
       - Usage: usage.md
       - Contributing: contributing.md
   - API:
-      - Overview: api/api.md
       - fixed-point functions:
         - fxp: api/fxp.md
         - fpxt: api/fxpt.md
