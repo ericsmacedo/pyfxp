@@ -28,7 +28,8 @@ theme:
 nav:
   - Home:
       - Welcome to pyfxp: index.md
-      - Usage: usage.md
+      - Examples:
+          - fixed-point integrator: examples/example_int.md
       - Contributing: contributing.md
   - API:
       - fixed-point functions:
