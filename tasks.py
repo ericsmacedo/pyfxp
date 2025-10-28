@@ -69,6 +69,7 @@ def test(c):
     """[All] Run Unittests via pytest."""
 
     run_cmd(c, f"rm -rf .coverage", force_color=True)
+    run_cmd(c, f"rm -rf src/pyfxp/__pycache__", force_color=True)
 
     # check if code supports numba
     run_cmd(
