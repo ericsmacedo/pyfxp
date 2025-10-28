@@ -42,7 +42,7 @@ class FxpSpec(NamedTuple):
     ovf: int
 
 
-@njit
+@njit(cache=True, nogil=True)
 def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) -> FxpSpec:
     """Create a fixed-point format specification using ARM-style Q-format notation.
 
@@ -106,7 +106,7 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) 
     return FxpSpec(qi, qf, signed, rnd, ovf)
 
 
-@njit
+@njit(cache=True, nogil=True)
 def fxp(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
     """Convert a numeric value to fixed-point representation using a pre-defined fixed-point specification.
 
@@ -178,7 +178,7 @@ def fxp(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
     return fxpt(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)
 
 
-@njit
+@njit(cache=True, nogil=True)
 def _rnd_scalar(x, method=TRUNC):  # noqa: PLR0911, PLR0912, C901
     if method == TRUNC:
         return int(np.floor(x))
@@ -212,7 +212,7 @@ def _rnd_scalar(x, method=TRUNC):  # noqa: PLR0911, PLR0912, C901
     raise ValueError(f"invalid method: {method}")
 
 
-@njit
+@njit(cache=True, nogil=True)
 def _rnd_array(x, method=TRUNC):
     if method == TRUNC:  # Round towards -inf
         x = np.floor(x)
@@ -221,15 +221,18 @@ def _rnd_array(x, method=TRUNC):
     elif method == TO_ZERO:
         pass
     elif method == AWAY:
-        x = np.where(x >= 0, np.ceil(np.abs(x)), -np.ceil(np.abs(x)))
+        ax = np.abs(x)
+        x = np.where(x >= 0, np.ceil(ax), -np.ceil(ax))
     elif method == HALF_UP:
         x = np.floor(x + RND_MIDPOINT)
     elif method == HALF_DOWN:
         x = np.ceil(x - RND_MIDPOINT)
     elif method == HALF_ZERO:
-        x = np.where(x >= 0, np.ceil(np.abs(x) - RND_MIDPOINT), -np.ceil(np.abs(x) - RND_MIDPOINT))
+        ax = np.abs(x)
+        x = np.where(x >= 0, np.ceil(ax - RND_MIDPOINT), -np.ceil(ax - RND_MIDPOINT))
     elif method == HALF_AWAY:
-        x = np.where(x >= 0, np.floor(np.abs(x) + RND_MIDPOINT), -np.floor(np.abs(x) + RND_MIDPOINT))
+        ax = np.abs(x)
+        x = np.where(x >= 0, np.floor(ax + RND_MIDPOINT), -np.floor(ax + RND_MIDPOINT))
     elif method == HALF_EVEN:
         floor_x = np.floor(x)
         frac = x - floor_x
@@ -246,7 +249,7 @@ def _rnd_array(x, method=TRUNC):
     return x.astype(np.int64)
 
 
-@njit
+@njit(cache=True, nogil=True)
 def _overflow_scalar(x: int, signed: bool = True, w: int = 16, method: int = WRAP):
     # Maximum and minimum values with w bits representation
     if signed:
@@ -276,7 +279,7 @@ def _overflow_scalar(x: int, signed: bool = True, w: int = 16, method: int = WRA
     return x
 
 
-@njit
+@njit(cache=True, nogil=True)
 def _overflow_array(x, signed: bool = True, w: int = 16, method: int = WRAP):
     x = np.asarray(x, dtype=np.int64)
 
@@ -307,7 +310,7 @@ def _overflow_array(x, signed: bool = True, w: int = 16, method: int = WRAP):
     return x
 
 
-@njit
+@njit(cache=True, nogil=True)
 def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     x = x * 2.0**qf
 
@@ -317,7 +320,7 @@ def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP): 
     return x / 2.0**qf
 
 
-@njit
+@njit(cache=True, nogil=True)
 def _fxpt_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     x *= 2.0**qf
 

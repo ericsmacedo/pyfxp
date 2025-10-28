@@ -13,3 +13,4 @@ dist/
 docs.zip
 report.xml
 site/
+__pycache__/
