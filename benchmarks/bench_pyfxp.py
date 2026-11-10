@@ -123,7 +123,7 @@ def fmt(seconds):
 
 def main():
     """Run all benchmarks and print a table."""
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description="Benchmarks for pyfxp.")
     parser.add_argument("--sizes", type=int, nargs="+", default=[1_000, 100_000, 1_000_000])
     parser.add_argument("--repeat", type=int, default=5)
     parser.add_argument("--max-slow-size", type=int, default=100_000, help="skip slow Python loops above this size")
