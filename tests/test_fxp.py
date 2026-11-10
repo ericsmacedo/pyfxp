@@ -52,8 +52,8 @@ def pytest_generate_tests(metafunc):
     """Generate tests from test_data.txt."""
     if "test_case" in metafunc.fixturenames:
         test_file = PRJ_PATH / "tests" / "test_data.txt"
-        lines = test_file.read_text().splitlines()[1:]  # Skip header
-        test_cases = [parse_test_line(line) for line in lines if line.strip()]
+        lines = test_file.read_text().splitlines()
+        test_cases = [parse_test_line(line) for line in lines if line.strip() and not line.startswith("#")]
         metafunc.parametrize("test_case", test_cases)
 
 

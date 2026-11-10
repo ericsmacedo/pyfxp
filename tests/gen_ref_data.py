@@ -26,17 +26,18 @@ from pathlib import Path
 
 import numpy as np
 
-from pyfxp import fxp
+from pyfxp import fxpt
 from pyfxp.constants import rounding_modes
 
 PRJ_PATH = Path(__file__).parent.parent
+SEED = 0
 
 
 def gen_ref():
     """Generate reference data for tests."""
     n_smp = 2**8
 
-    rng = np.random.default_rng()  # Create a Generator instance
+    rng = np.random.default_rng(SEED)
     w = rng.integers(low=1, high=16, size=n_smp)
     qf = rng.integers(low=0, high=8, size=n_smp)
     qi = w - qf
@@ -46,7 +47,7 @@ def gen_ref():
     ref_file = ""
     for i in range(n_smp):
         for rnd, ovf, signed in fxp_args:
-            out = fxp(x[i], qi=qi[i], qf=qf[i], rnd=rnd, ovf=ovf, signed=signed)
+            out = fxpt(x[i], qi=int(qi[i]), qf=int(qf[i]), rnd=rnd, ovf=ovf, signed=signed)
             ref_file += f"{x[i]}, {qi[i]}, {qf[i]}, {rnd}, {ovf}, {signed}, {out}\n"
 
     output_path = PRJ_PATH / "tests" / "test_data.txt"

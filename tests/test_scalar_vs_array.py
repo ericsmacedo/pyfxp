@@ -75,6 +75,7 @@ OVERFLOW_METHODS = [WRAP, SAT]
 SIGNED = [True, False]
 ARR_NJIT = [True, False]
 SCALAR_NJIT = [True, False]
+SEED = 0
 
 
 @pytest.mark.parametrize("qi", QI_VALUES)
@@ -86,7 +87,7 @@ SCALAR_NJIT = [True, False]
 @pytest.mark.parametrize("scalar_njit", SCALAR_NJIT)
 def test_array_vs_scalar_consistency(qi, qf, rnd, ovf, signed, arr_njit, scalar_njit):  # noqa: PLR0913
     """Test that array and scalar implementations produce identical results."""
-    rng = np.random.default_rng()  # Create a Generator instance
+    rng = np.random.default_rng(SEED)
     test_data = rng.uniform(low=-1000.0, high=1000.0, size=2**4)
 
     # Array implementation
