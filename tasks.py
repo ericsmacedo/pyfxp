@@ -84,6 +84,12 @@ def test(c):
 
 
 @task
+def bench(c):
+    """Run benchmarks (not part of 'all')."""
+    run_cmd(c, f"{ENV} python benchmarks/bench_pyfxp.py")
+
+
+@task
 def checktypes(c):
     """[All] Run Type-Checking via mypy."""
     run_cmd(c, f"{ENV} ty check", force_color=True)
