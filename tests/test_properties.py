@@ -248,4 +248,4 @@ def test_ties_exhaustive(rnd, signed):
     xs = [(k + 0.5) / 2**qf for k in range(-(2 ** (qi + qf)), 2 ** (qi + qf))]
     expected = [ref_fxp(x, qi, qf, signed, rnd, SAT) for x in xs]
     assert [fxpt(x, qi, qf, signed, rnd, SAT) for x in xs] == expected
-    assert fxpt(np.array(xs), qi, qf, signed, rnd, SAT).tolist() == expected
+    assert np.asarray(fxpt(np.array(xs), qi, qf, signed, rnd, SAT)).tolist() == expected
