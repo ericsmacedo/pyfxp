@@ -106,7 +106,8 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) 
 
     Examples
     --------
-    >>> spec = Q(3, 1)  # Q3.5 format (3 integer bits, 5 fractional bits)
+    >>> from pyfxp import Q, fxp
+    >>> spec = Q(3, 1)  # Q3.1 format (3 integer bits, 1 fractional bit)
     >>> spec.qi, spec.qf
     (3, 1)
     >>> fxp(1.25, spec)
@@ -164,9 +165,8 @@ def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndar
 
     Notes
     -----
-    - Equivalent to:
-          >>> fxp(x, Q(qi, qf, signed, rnd, ovf))
-          == fxpt(x, qi, qf, signed, rnd, ovf)
+    - `fxp(x, Q(qi, qf, signed, rnd, ovf))` is equivalent to
+      `fxpt(x, qi, qf, signed, rnd, ovf)`.
     - Uses ARM-style Q-format notation (Qm.n), where:
         * m = `qi`  → number of integer bits (including signed bit if `signed=True`)
         * n = `qf`  → number of fractional bits
@@ -176,11 +176,11 @@ def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndar
     --------
     >>> from pyfxp import Q, fxp
     >>> from pyfxp.constants import TRUNC, WRAP
-    >>> import numpy as np
-    >>> np.pi
-    >>> 3.14159265358979
-    >>> Q3_4T = Q(3, 4, signed=True, rnd=TRUNC, ovf=WRAP)      # Q3.4 format (3 integer bits, 4 fractional bits)
-    >>> fxp(np.pi, Q3_4T)
+    >>> import math
+    >>> math.pi
+    3.141592653589793
+    >>> Q3_4T = Q(3, 4, signed=True, rnd=TRUNC, ovf=WRAP)  # Q3.4 format (3 integer bits, 4 fractional bits)
+    >>> fxp(math.pi, Q3_4T)
     3.125
     """
     return fxpt(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)
@@ -486,10 +486,10 @@ def fxpt(  # noqa: PLR0913
     --------
     >>> from pyfxp import fxpt
     >>> from pyfxp.constants import TRUNC, WRAP
-    >>> import numpy as np
-    >>> np.pi
-    >>> 3.14159265358979
-    >>> fxpt(np.pi, 3, 4, signed=True, rnd=TRUNC, ovf=WRAP)  # Q3.4 format (3 integer bits, 4 fractional bits)
+    >>> import math
+    >>> math.pi
+    3.141592653589793
+    >>> fxpt(math.pi, 3, 4, signed=True, rnd=TRUNC, ovf=WRAP)  # Q3.4 format (3 integer bits, 4 fractional bits)
     3.125
     """
     if isinstance(x, np.ndarray):
@@ -498,7 +498,8 @@ def fxpt(  # noqa: PLR0913
     if isinstance(x, float | int | np.integer | np.floating):
         # float() gives one compiled specialization for every scalar type (and handles
         # float16, which Numba can't type); the scaling step converts to float anyway.
-        return _fxpt_scalar(float(x), qi, qf, signed, rnd, ovf)
+        # float(): with NUMBA_DISABLE_JIT=1 the kernel returns np.float64
+        return float(_fxpt_scalar(float(x), qi, qf, signed, rnd, ovf))
 
     if isinstance(x, list | tuple):
         return _fxpt_array(np.asarray(x, dtype=np.float64), qi, qf, signed, rnd, ovf)
