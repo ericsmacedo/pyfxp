@@ -28,7 +28,22 @@ import numpy as np
 from numba import njit, types
 from numba.extending import overload
 
-from .constants import AWAY, CEIL, ERROR, HALF_AWAY, HALF_DOWN, HALF_EVEN, HALF_UP, HALF_ZERO, SAT, TO_ZERO, TRUNC, WRAP
+from .constants import (
+    AWAY,
+    CEIL,
+    ERROR,
+    HALF_AWAY,
+    HALF_DOWN,
+    HALF_EVEN,
+    HALF_UP,
+    HALF_ZERO,
+    SAT,
+    TO_ZERO,
+    TRUNC,
+    WRAP,
+    Overflow,
+    Rounding,
+)
 
 RND_MIDPOINT = 0.5  # Threshold for half-way rounding
 
@@ -51,8 +66,19 @@ class FxpSpec(NamedTuple):
     ovf: int
 
 
-@njit(cache=True, nogil=True)
-def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) -> FxpSpec:
+def _check_mode_kinds(rnd, ovf) -> None:
+    """Raise TypeError when a rounding and an overflow mode are swapped.
+
+    TRUNC and WRAP are both 0 and CEIL and SAT are both 1, so a swap would
+    otherwise be accepted silently. Plain integers are not checked here.
+    """
+    if isinstance(rnd, Overflow):
+        raise TypeError(f"rnd={rnd!r} is an overflow mode; did you swap rnd and ovf?")
+    if isinstance(ovf, Rounding):
+        raise TypeError(f"ovf={ovf!r} is a rounding mode; did you swap rnd and ovf?")
+
+
+def Q(qi: int, qf: int, signed: bool = True, rnd: int | np.integer = TRUNC, ovf: int | np.integer = WRAP) -> FxpSpec:
     """Create a fixed-point format specification using ARM-style Q-format notation.
 
     The `Q` function defines a fixed-point representation by specifying
@@ -68,8 +94,9 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) 
         Number of fractional bits.
     signed : bool, optional
         Whether the fixed-point format is signed (default is True).
-    rnd : int, optional
-        Rounding method to apply (default is TRUNC (0)).
+    rnd : Rounding or int, optional
+        Rounding method to apply (default is TRUNC (0)). Integer codes are
+        converted to `Rounding` members, so the returned spec prints mode names.
 
         Supported methods:
 
@@ -83,8 +110,9 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) 
         - HALF_ZERO (7): Round to nearest; ties toward zero
         - HALF_AWAY (8): Round to nearest; ties away from zero
 
-    ovf : int, optional
-        Overflow handling method (default is WRAP (0)).
+    ovf : Overflow or int, optional
+        Overflow handling method (default is WRAP (0)). Integer codes are
+        converted to `Overflow` members.
 
         Supported methods:
 
@@ -96,6 +124,14 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) 
     -------
     FxpSpec
         A specification object describing the fixed-point format.
+
+    Raises
+    ------
+    ValueError
+        If `rnd` or `ovf` is not a valid mode code.
+    TypeError
+        If an `Overflow` member is passed as `rnd` or a `Rounding` member as `ovf`
+        (a likely swap: TRUNC and WRAP are both 0, CEIL and SAT are both 1).
 
     Notes
     -----
@@ -113,6 +149,15 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) 
     >>> fxp(1.25, spec)
     1.0
     """
+    _check_mode_kinds(rnd, ovf)
+    try:
+        rnd = Rounding(rnd)
+    except ValueError:
+        raise ValueError(f"invalid method: {rnd}") from None
+    try:
+        ovf = Overflow(ovf)
+    except ValueError:
+        raise ValueError(f"invalid method: {ovf}") from None
     return FxpSpec(qi, qf, signed, rnd, ovf)
 
 
@@ -371,7 +416,7 @@ def fxpt(  # noqa: PLR0913
         Number of fractional bits.
     signed : bool, optional
         Whether the fixed-point format is signed (default is True).
-    rnd : int, optional
+    rnd : Rounding or int, optional
         Rounding method to apply (default is TRUNC (0)).
 
         Supported methods:
@@ -386,7 +431,7 @@ def fxpt(  # noqa: PLR0913
         - HALF_ZERO (7): Round to nearest; ties round toward zero.
         - HALF_AWAY (8): Round to nearest; ties round away from zero.
 
-    ovf : int, optional
+    ovf : Overflow or int, optional
         Overflow handling method (default is WRAP (0)).
 
         Supported methods:
@@ -422,10 +467,14 @@ def fxpt(  # noqa: PLR0913
     >>> fxpt(math.pi, 3, 4, signed=True, rnd=TRUNC, ovf=WRAP)  # Q3.4 format (3 integer bits, 4 fractional bits)
     3.125
     """
+    _check_mode_kinds(rnd, ovf)
     if not TRUNC <= rnd <= HALF_AWAY:
         raise ValueError(f"invalid method: {rnd}")
     if not WRAP <= ovf <= ERROR:
         raise ValueError(f"invalid method: {ovf}")
+    # Plain ints for the compiled kernel: Numba's dispatcher types IntEnum
+    # arguments ~10x slower than ints, which dominated scalar calls from Python.
+    rnd, ovf = int(rnd), int(ovf)
 
     if isinstance(x, np.ndarray):
         return _fxpt_array(x, qi, qf, signed, rnd, ovf)
@@ -475,5 +524,15 @@ def _fxp_overload(x, spec):  # noqa: ARG001
 
     def impl(x, spec):
         return fxpt(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)  # pragma: no cover
+
+    return impl
+
+
+@overload(Q, inline="always")
+def _q_overload(qi, qf, signed=True, rnd=TRUNC, ovf=WRAP):  # noqa: ARG001
+    """Make `Q` callable from user @njit code (it is a plain function at Python level)."""
+
+    def impl(qi, qf, signed=True, rnd=TRUNC, ovf=WRAP):
+        return FxpSpec(qi, qf, signed, rnd, ovf)  # pragma: no cover
 
     return impl
