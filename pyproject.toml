@@ -31,6 +31,7 @@ keywords = []
 dev = [
     "contextlib-chdir>=1.0.2",
     "coveralls>=3.3.1",
+    "hypothesis>=6.168.5",
     "invoke>=2.2.0",
     "matplotlib>=3.10.7",
     "mkdocs-click>=0.8.1",
