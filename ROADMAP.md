@@ -4,7 +4,8 @@ Tracked improvements for pyfxp. Tick an item and link its PR when it lands.
 
 ## Correctness
 
-- [ ] Reject formats wider than 53 bits (`qi + qf`). Today they silently return wrong values, e.g. `fxpt(1.0, 40, 30)` → `-5.96e-08`.
+- [x] Support formats up to 64 bits signed / 63 bits unsigned and reject wider ones (`qi + qf`); they used to silently return wrong values, e.g. `fxpt(1.0, 40, 30)` → `-5.96e-08`.
+- [ ] Clamp before the float → int64 cast: inputs with `|x| * 2**qf >= 2**63` give wrong results in any format, e.g. `fxpt(1e19, 8, 4, ovf=SAT)` → `-128.0` instead of `127.9375`.
 - [ ] Validate `qi` / `qf` (no negative values, total width ≥ 1).
 - [ ] Accept NumPy scalars (`np.integer`, `np.floating`) and array-likes (lists, tuples) as input.
 - [ ] Make overflow `ERROR` messages useful: include the value, the format and the valid range.
@@ -14,7 +15,7 @@ Tracked improvements for pyfxp. Tick an item and link its PR when it lands.
 Baseline numbers come from `uv run inv bench`.
 
 - [ ] Speed up the per-sample path inside `@njit` code: 19–26 ns/sample today vs 0.7 ns for a hand-written loop (~30×).
-- [ ] Find out why `WRAP` costs ~7 ns/sample more than `SAT` in the scalar path.
+- [x] Find out why `WRAP` costs ~7 ns/sample more than `SAT` in the scalar path (fixed by the new mask computation).
 - [ ] Convert large arrays in a single loop instead of chained NumPy temporaries (3–5× slower than NumPy at 1M elements).
 - [ ] Remove the redundant `HALF_EVEN` special case (`np.round` already rounds ties to even).
 - [ ] Merge the duplicated scalar and array implementations.
@@ -43,5 +44,5 @@ Baseline numbers come from `uv run inv bench`.
 - [x] Pin Python in the coveralls finish job (#13).
 - [ ] Property-based tests against an exact reference model (#11).
 - [ ] Benchmarks with `inv bench` (#12).
-- [ ] Add tests for wide formats once the 53-bit check exists.
+- [x] Add tests for wide formats.
 - [ ] Fix the empty `COVERALLS_FLAG_NAME` (`matrix.test-name` does not exist).
