@@ -19,9 +19,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-"""Tests package against reference data."""
-
-"""Inputs whose scaled value |x| * 2**qf does not fit in int64 (issue #18)."""
+"""Inputs with a large scaled value |x| * 2**qf: beyond 2**52 (issue #24) and beyond 2**63 (issue #18)."""
 
 import numpy as np
 import pytest
@@ -30,7 +28,9 @@ from hypothesis import strategies as st
 
 from pyfxp import FxpSpec, fxp, fxpt
 from pyfxp._pyfxp import _into_int64_range_scalar
-from pyfxp.constants import ERROR, SAT, WRAP
+from pyfxp.constants import ERROR, HALF_AWAY, HALF_DOWN, HALF_UP, HALF_ZERO, SAT, WRAP
+
+from pyfxp.constants import rounding_modes
 
 from .test_properties import ref_fxp, specs
 
@@ -96,3 +96,35 @@ def test_wrap_reduction_64_bits(x):
     y = _into_int64_range_scalar(x, 64, WRAP)
     assert -(2.0**63) <= y < 2.0**63
     assert (int(x) - int(y)) % 2**64 == 0
+
+
+@st.composite
+def spec_and_value_above_2_52(draw):
+    """A 60-bit format and a value whose scaled magnitude is in [2**52, 2**59), so no overflow occurs."""
+    qf = draw(st.integers(0, 40))
+    spec = FxpSpec(60 - qf, qf, True, draw(st.sampled_from(sorted(rounding_modes.values()))), SAT)
+    k = draw(st.integers(2**52, 2**59 - 1)) * draw(st.sampled_from([1, -1]))
+    return spec, float(k) / 2**qf
+
+
+@given(spec_and_value_above_2_52())
+def test_rounding_above_2_52_matches_reference(case):
+    """Scaled values >= 2**52 are integers; no rounding mode may change them (issue #24)."""
+    spec, x = case
+    expected = ref_fxp(x, *spec)
+    assert fxp(x, spec) == expected
+    assert np.asarray(fxp(np.array([x]), spec)).tolist() == [expected]
+
+
+@pytest.mark.parametrize("rnd", [HALF_UP, HALF_DOWN, HALF_ZERO, HALF_AWAY])
+@pytest.mark.parametrize("sign", [1, -1])
+@pytest.mark.parametrize("as_array", [False, True])
+def test_issue_24_examples(rnd, sign, as_array):
+    """The examples from issue #24: 2**52 + 1 is unchanged by every half-rounding mode."""
+    x = sign * (2.0**52 + 1)
+    y = fxpt(np.array([x]) if as_array else x, 60, 0, True, rnd, SAT)
+    assert np.asarray(y).tolist() == ([x] if as_array else x)
+    # same scaled value via fractional bits
+    x2 = sign * (2.0**12 + 2.0**-40)
+    y2 = fxpt(np.array([x2]) if as_array else x2, 20, 40, True, rnd, SAT)
+    assert np.asarray(y2).tolist() == ([x2] if as_array else x2)

@@ -192,18 +192,22 @@ def _rnd_scalar(x, method=TRUNC):  # noqa: PLR0911, PLR0912, C901
         if x >= 0:
             return int(np.ceil(x))
         return int(-np.ceil(np.abs(x)))
+    # Round-to-nearest modes decide from floor(x) and frac = x - floor(x), which are
+    # both exact; x +/- 0.5 is not exact once |x| >= 2**52.
     if method == HALF_UP:
-        return int(np.floor(x + RND_MIDPOINT))
+        floor_x = np.floor(x)
+        return int(floor_x + (x - floor_x >= RND_MIDPOINT))
     if method == HALF_DOWN:
-        return int(np.ceil(x - RND_MIDPOINT))
+        floor_x = np.floor(x)
+        return int(floor_x + (x - floor_x > RND_MIDPOINT))
     if method == HALF_ZERO:
-        if x >= 0:
-            return int(np.ceil(x - RND_MIDPOINT))
-        return int(-np.ceil(np.abs(x) - RND_MIDPOINT))
+        floor_x = np.floor(x)
+        frac = x - floor_x
+        return int(floor_x + (frac > RND_MIDPOINT or (frac == RND_MIDPOINT and floor_x < 0)))
     if method == HALF_AWAY:
-        if x >= 0:
-            return int(np.floor(x + RND_MIDPOINT))
-        return int(-np.floor(np.abs(x) + RND_MIDPOINT))
+        floor_x = np.floor(x)
+        frac = x - floor_x
+        return int(floor_x + (frac > RND_MIDPOINT or (frac == RND_MIDPOINT and floor_x >= 0)))
     if method == HALF_EVEN:
         floor_x = np.floor(x)
         frac = x - floor_x
@@ -225,16 +229,21 @@ def _rnd_array(x, method=TRUNC):
     elif method == AWAY:
         ax = np.abs(x)
         x = np.where(x >= 0, np.ceil(ax), -np.ceil(ax))
+    # See _rnd_scalar: decide from floor(x) and the exact fraction, not x +/- 0.5.
     elif method == HALF_UP:
-        x = np.floor(x + RND_MIDPOINT)
+        floor_x = np.floor(x)
+        x = floor_x + (x - floor_x >= RND_MIDPOINT)
     elif method == HALF_DOWN:
-        x = np.ceil(x - RND_MIDPOINT)
+        floor_x = np.floor(x)
+        x = floor_x + (x - floor_x > RND_MIDPOINT)
     elif method == HALF_ZERO:
-        ax = np.abs(x)
-        x = np.where(x >= 0, np.ceil(ax - RND_MIDPOINT), -np.ceil(ax - RND_MIDPOINT))
+        floor_x = np.floor(x)
+        frac = x - floor_x
+        x = floor_x + ((frac > RND_MIDPOINT) | ((frac == RND_MIDPOINT) & (floor_x < 0)))
     elif method == HALF_AWAY:
-        ax = np.abs(x)
-        x = np.where(x >= 0, np.floor(ax + RND_MIDPOINT), -np.floor(ax + RND_MIDPOINT))
+        floor_x = np.floor(x)
+        frac = x - floor_x
+        x = floor_x + ((frac > RND_MIDPOINT) | ((frac == RND_MIDPOINT) & (floor_x >= 0)))
     elif method == HALF_EVEN:
         floor_x = np.floor(x)
         frac = x - floor_x
