@@ -38,11 +38,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.13
         uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
           enable-cache: true
           cache-dependency-glob: "uv.lock"
       - name: Upload coverage data to coveralls.io
