@@ -21,13 +21,12 @@
 # SOFTWARE.
 
 
+import math
 from collections.abc import Sequence
 from typing import Any, NamedTuple, TypeAlias
 
 import numpy as np
 from numba import njit, types
-import math
-
 from numba.extending import overload, overload_attribute
 
 from .constants import (
