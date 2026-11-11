@@ -2,7 +2,7 @@
 [project]
 name = "pyfxp"
 dynamic = ["version"]
-description = "Python fixed-point library.."
+description = "Python fixed-point library."
 readme = "README.md"
 authors = [
     {name = "Eric Macedo", email = "ericsmacedo@gmail.com"},
