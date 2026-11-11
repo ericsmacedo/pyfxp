@@ -25,7 +25,7 @@ Baseline numbers come from `uv run inv bench`.
 
 ## API / user experience
 
-- [ ] Spec arithmetic helpers for bit growth, e.g. `Q.add(a, b)`, `Q.mul(a, b)`, `Q.acc(spec, n)`.
+- [x] Spec arithmetic helpers for bit growth: `a.add(b)`, `a.sub(b)`, `a.mul(b)`, `a.neg()`, `a.acc(n)` (#41).
 - [x] `FxpSpec` helpers: `min`, `max`, `min_int`, `max_int`, `lsb`, `width`, and a readable repr such as `sQ3.13(HALF_EVEN, SAT)` (#40).
 - [ ] Format check `check(x, spec)` that raises if `x` isn't exactly representable in `spec`, behind a global switch that costs nothing when off. Catches forgotten quantization.
 - [ ] Raw integer conversion `to_int(x, spec)` / `from_int(n, spec)`, plus bin/hex helpers for HDL test vectors.

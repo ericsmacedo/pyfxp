@@ -137,6 +137,90 @@ class FxpSpec(NamedTuple):
         """Largest representable value, `max_int * lsb` (rounded to float64 above 53 bits)."""
         return math.ldexp(self.max_int, -self.qf)
 
+    # Result formats of arithmetic (bit growth). Each method returns the smallest
+    # format that holds every possible exact result, so converting the result
+    # with it never rounds or overflows. rnd/ovf are taken from `self`.
+
+    def add(self, other: "FxpSpec") -> "FxpSpec":
+        """Full-precision format of `a + b` (a value of `self` plus a value of `other`).
+
+        >>> from pyfxp import Q
+        >>> Q(4, 5).add(Q(7, 5))
+        sQ8.5(TRUNC, WRAP)
+        >>> Q(4, 5, signed=False).add(Q(4, 5, signed=False))
+        uQ5.5(TRUNC, WRAP)
+        """
+        qf, (lo_a, hi_a), (lo_b, hi_b) = _aligned(self, other)
+        return _fit("add", lo_a + lo_b, hi_a + hi_b, qf, self)
+
+    def sub(self, other: "FxpSpec") -> "FxpSpec":
+        """Full-precision format of `a - b`. Always signed unless the result can't be negative.
+
+        >>> from pyfxp import Q
+        >>> Q(4, 5).sub(Q(4, 5))
+        sQ5.5(TRUNC, WRAP)
+        >>> Q(4, 5, signed=False).sub(Q(4, 5, signed=False))
+        sQ5.5(TRUNC, WRAP)
+        """
+        qf, (lo_a, hi_a), (lo_b, hi_b) = _aligned(self, other)
+        return _fit("sub", lo_a - hi_b, hi_a - lo_b, qf, self)
+
+    def mul(self, other: "FxpSpec") -> "FxpSpec":
+        """Full-precision format of `a * b`: the fractional bits add up.
+
+        >>> from pyfxp import Q
+        >>> Q(4, 5).mul(Q(7, 5))
+        sQ11.10(TRUNC, WRAP)
+        >>> Q(1, 15).mul(Q(1, 15))
+        sQ2.30(TRUNC, WRAP)
+        """
+        corners = [x * y for x in (self.min_int, self.max_int) for y in (other.min_int, other.max_int)]
+        return _fit("mul", min(corners), max(corners), self.qf + other.qf, self)
+
+    def neg(self) -> "FxpSpec":
+        """Full-precision format of `-a`. Needs one more bit, because `-min` is not representable.
+
+        >>> from pyfxp import Q
+        >>> Q(4, 5).neg()
+        sQ5.5(TRUNC, WRAP)
+        """
+        return _fit("neg", -self.max_int, -self.min_int, self.qf, self)
+
+    def acc(self, n: int) -> "FxpSpec":
+        """Full-precision format of a sum of `n` values of this format (an accumulator).
+
+        >>> from pyfxp import Q
+        >>> Q(4, 5).acc(1024)
+        sQ14.5(TRUNC, WRAP)
+        """
+        if n < 1:
+            raise ValueError(f"acc needs n >= 1, got {n}")
+        return _fit("acc", n * self.min_int, n * self.max_int, self.qf, self)
+
+
+def _aligned(a: FxpSpec, b: FxpSpec) -> tuple[int, tuple[int, int], tuple[int, int]]:
+    """Common qf of `a` and `b`, and both integer ranges expressed in units of 2**-qf."""
+    qf = max(a.qf, b.qf)
+    sa, sb = qf - a.qf, qf - b.qf
+    return qf, (a.min_int << sa, a.max_int << sa), (b.min_int << sb, b.max_int << sb)
+
+
+def _fit(op: str, lo: int, hi: int, qf: int, like: FxpSpec) -> FxpSpec:
+    """Smallest format with `qf` fractional bits whose integer range contains [lo, hi]."""
+    signed = lo < 0
+    if signed:
+        w = max((-lo - 1).bit_length(), hi.bit_length()) + 1
+    else:
+        w = max(hi.bit_length(), 1)
+    limit = MAX_WIDTH_SIGNED if signed else MAX_WIDTH_UNSIGNED
+    if w > limit:
+        kind = "signed" if signed else "unsigned"
+        raise ValueError(
+            f"{op}: the full-precision result needs {w} bits, more than the {limit}-bit limit for {kind} "
+            "formats; quantize an operand to a narrower format first"
+        )
+    return FxpSpec(w - qf, qf, signed, like.rnd, like.ovf)
+
 
 def _check_mode_kinds(rnd, ovf) -> None:
     """Raise TypeError when a rounding and an overflow mode are swapped.
