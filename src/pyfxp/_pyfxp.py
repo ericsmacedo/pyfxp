@@ -355,6 +355,8 @@ def _into_int64_range_scalar(x: float, w: int, method: int = WRAP) -> float:
     if not (x >= _TWO_63 or x < -_TWO_63):
         return x
     if method == WRAP:
+        if np.isinf(x):
+            return np.nan  # an infinite value has no defined wrap
         m = 2.0**w
         x = np.fmod(x, m)  # exact; |x| < 2**w afterwards
         if x >= _TWO_63:  # only possible for w == 64
@@ -369,30 +371,49 @@ def _into_int64_range_scalar(x: float, w: int, method: int = WRAP) -> float:
 
 @njit(cache=True, nogil=True)
 def _into_int64_range_array(x, w: int, method: int = WRAP):
-    """Array version of `_into_int64_range_scalar`; only touches out-of-range elements."""
+    """Array version of `_into_int64_range_scalar`; only touches out-of-range elements.
+
+    NaN elements (including ±inf under WRAP, which becomes NaN) are set to 0 so the
+    integer steps stay defined. Returns `(x, nan_mask, has_nan)`; `nan_mask` is only
+    allocated when a NaN is found, so the common case costs one compare per element.
+    """
     flat = x.reshape(-1)  # view: x is a fresh contiguous array
+    has_nan = False
+    nan_mask = np.zeros(0, dtype=np.bool_)
     for i in range(flat.size):
         v = flat[i]
         if v >= _TWO_63 or v < -_TWO_63:
-            flat[i] = _into_int64_range_scalar(v, w, method)
-    return x
+            v = _into_int64_range_scalar(v, w, method)
+            flat[i] = v
+        if v != v:  # NaN
+            if not has_nan:
+                has_nan = True
+                nan_mask = np.zeros(flat.size, dtype=np.bool_)
+            nan_mask[i] = True
+            flat[i] = 0.0
+    return x, nan_mask, has_nan
 
 
 @njit(cache=True, nogil=True)
 def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     x = x * 2.0**qf
-    x = _into_int64_range_array(x, w=(qi + qf), method=ovf)
+    x, nan_mask, has_nan = _into_int64_range_array(x, w=(qi + qf), method=ovf)
 
     x = _rnd_array(x, method=rnd)
     x = _overflow_array(x, signed=signed, w=(qi + qf), method=ovf)
 
-    return x / 2.0**qf
+    out = x / 2.0**qf
+    if has_nan:
+        out.reshape(-1)[nan_mask] = np.nan  # NaN in, NaN out
+    return out
 
 
 @njit(cache=True, nogil=True)
 def _fxpt_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     x *= 2.0**qf
     x = _into_int64_range_scalar(x, w=(qi + qf), method=ovf)
+    if x != x:  # NaN in, NaN out (also ±inf under WRAP)
+        return x
 
     x = _rnd_scalar(x, method=rnd)
     x = _overflow_scalar(x, signed=signed, w=(qi + qf), method=ovf)
@@ -449,6 +470,11 @@ def fxpt(  # noqa: PLR0913
     Uses ARM-style Q-format notation where a Qm.n format has:
         - m integer bits (qi) (including sign bit if signed=True)
         - n fractional bits (qf)
+
+    Non-finite inputs:
+        - NaN is returned unchanged, for every rounding and overflow mode.
+        - ±inf saturates to the max/min value with SAT, raises with ERROR,
+          and returns NaN with WRAP (an infinite value has no defined wrap).
 
     Examples
     --------
