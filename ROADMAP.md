@@ -28,7 +28,7 @@ Baseline numbers come from `uv run inv bench`.
 - [x] Spec arithmetic helpers for bit growth: `a.add(b)`, `a.sub(b)`, `a.mul(b)`, `a.neg()`, `a.acc(n)` (#41).
 - [x] `FxpSpec` helpers: `min`, `max`, `min_int`, `max_int`, `lsb`, `width`, and a readable repr such as `sQ3.13(HALF_EVEN, SAT)` (#40).
 - [ ] Format check `check(x, spec)` that raises if `x` isn't exactly representable in `spec`, behind a global switch that costs nothing when off. Catches forgotten quantization.
-- [ ] Raw integer conversion `to_int(x, spec)` / `from_int(n, spec)`, plus bin/hex helpers for HDL test vectors.
+- [x] Raw integer conversion `to_int(x, spec)` / `from_int(n, spec)`, plus `to_bin` / `to_hex` / `from_bin` / `from_hex` for HDL test vectors (#43).
 - [x] Rounding and overflow modes as `IntEnum`s: readable when printed, still usable inside Numba (#42).
 - [ ] Complex number support (quantize real and imaginary parts separately).
 - [ ] Optional thin Python wrapper type that tracks its spec, for interactive exploration only. The core stays on plain floats.
