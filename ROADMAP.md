@@ -33,7 +33,7 @@ Baseline numbers come from `uv run inv bench`.
 
 ## Documentation
 
-- [ ] Fix the broken docstring examples (`Q(3, 1)` labelled "Q3.5", stray `>>> 3.14159…` lines).
+- [x] Fix the broken docstring examples (`Q(3, 1)` labelled "Q3.5", stray `>>> 3.14159…` lines) and run them as doctests (#20).
 - [ ] Fix the `fxpt` "Returns" section (it returns floats, not integers).
 - [ ] Use one docstring style throughout: mkdocs is set up for NumPy style, ruff for Google style.
 - [ ] Fix the `pyproject.toml` description typo ("library..").
