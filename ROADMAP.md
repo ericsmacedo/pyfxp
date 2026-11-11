@@ -8,6 +8,7 @@ Tracked improvements for pyfxp. Tick an item and link its PR when it lands.
 - [x] Inputs with `|x| * 2**qf >= 2**63` gave wrong results in any format (#18), e.g. `fxpt(1e19, 8, 4, ovf=SAT)` → `-128.0` instead of `127.9375`.
 - [x] HALF_* rounding was wrong for scaled values >= 2**52 (#24).
 - [ ] Validate `qi` / `qf` (no negative values, total width ≥ 1).
+- [x] Support arrays of any shape and layout (#26).
 - [x] Accept NumPy scalars (`np.integer`, `np.floating`) and array-likes (lists, tuples) as input (#19).
 - [ ] Make overflow `ERROR` messages useful: include the value, the format and the valid range.
 
@@ -15,11 +16,12 @@ Tracked improvements for pyfxp. Tick an item and link its PR when it lands.
 
 Baseline numbers come from `uv run inv bench`.
 
-- [ ] Speed up the per-sample path inside `@njit` code: 19–26 ns/sample today vs 0.7 ns for a hand-written loop (~30×).
+- [x] Speed up the per-sample path inside `@njit` code: 15–18 → ~5 ns/sample (#30). A hand-written single-mode loop is 0.7 ns; the rest is the run-time method dispatch.
 - [x] Find out why `WRAP` costs ~7 ns/sample more than `SAT` in the scalar path (fixed by the new mask computation).
-- [ ] Convert large arrays in a single loop instead of chained NumPy temporaries (3–5× slower than NumPy at 1M elements).
+- [x] Convert large arrays in a single loop instead of chained NumPy temporaries: 10–40 → ~5 ns/elem at 1M elements (#31).
 - [ ] Remove the redundant `HALF_EVEN` special case (`np.round` already rounds ties to even).
-- [ ] Merge the duplicated scalar and array implementations.
+- [x] Merge the duplicated scalar and array implementations (#31).
+- [ ] Vectorize the array loop (fast pass without checks, then fix up rare out-of-range / NaN elements) to approach 1 ns/elem.
 
 ## API / user experience
 
