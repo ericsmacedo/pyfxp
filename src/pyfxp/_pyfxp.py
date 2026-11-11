@@ -30,6 +30,8 @@ from numba.extending import overload
 from .constants import AWAY, CEIL, ERROR, HALF_AWAY, HALF_DOWN, HALF_EVEN, HALF_UP, HALF_ZERO, SAT, TO_ZERO, TRUNC, WRAP
 
 RND_MIDPOINT = 0.5  # Threshold for half-way rounding
+_TWO_63 = 2.0**63  # first float64 outside the int64 range
+_MAX_BELOW_TWO_63 = 2.0**63 - 1024.0  # largest float64 below 2**63
 
 
 class FxpSpec(NamedTuple):
@@ -329,8 +331,48 @@ def _overflow_array(x, signed: bool = True, w: int = 16, method: int = WRAP):
 
 
 @njit(cache=True, nogil=True)
+def _into_int64_range_scalar(x: float, w: int, method: int = WRAP) -> float:
+    """Bring a scaled value into the int64 range so the int64 cast in rounding is defined.
+
+    Values with |x| >= 2**63 are already integers and lie outside every supported
+    format, so:
+
+    - WRAP: reduce modulo 2**w (exact for floats), keeping the bits WRAP keeps.
+    - SAT / ERROR: clamp to the int64 range, which still saturates / raises
+      in the overflow step.
+
+    NaN is returned unchanged.
+    """
+    if not (x >= _TWO_63 or x < -_TWO_63):
+        return x
+    if method == WRAP:
+        m = 2.0**w
+        x = np.fmod(x, m)  # exact; |x| < 2**w afterwards
+        if x >= _TWO_63:  # only possible for w == 64
+            x -= m
+        elif x < -_TWO_63:
+            x += m
+        return x
+    if x > 0:
+        return _MAX_BELOW_TWO_63
+    return -_TWO_63
+
+
+@njit(cache=True, nogil=True)
+def _into_int64_range_array(x, w: int, method: int = WRAP):
+    """Array version of `_into_int64_range_scalar`; only touches out-of-range elements."""
+    flat = x.reshape(-1)  # view: x is a fresh contiguous array
+    for i in range(flat.size):
+        v = flat[i]
+        if v >= _TWO_63 or v < -_TWO_63:
+            flat[i] = _into_int64_range_scalar(v, w, method)
+    return x
+
+
+@njit(cache=True, nogil=True)
 def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     x = x * 2.0**qf
+    x = _into_int64_range_array(x, w=(qi + qf), method=ovf)
 
     x = _rnd_array(x, method=rnd)
     x = _overflow_array(x, signed=signed, w=(qi + qf), method=ovf)
@@ -341,6 +383,7 @@ def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP): 
 @njit(cache=True, nogil=True)
 def _fxpt_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     x *= 2.0**qf
+    x = _into_int64_range_scalar(x, w=(qi + qf), method=ovf)
 
     x = _rnd_scalar(x, method=rnd)
     x = _overflow_scalar(x, signed=signed, w=(qi + qf), method=ovf)
