@@ -118,7 +118,9 @@ The constants above are defined in the [`pyfxp.constants`](https://pyfxp.readthe
 They are used by both `fxpt` and `fxp` to specify fixed-point arithmetic behavior.
 
 !!! tip "Usage example"
-    These constants are simple numeric codes — meant to be **readable and interoperable** with compiled or vectorized backends (e.g. Numba or C extensions).
+    The modes are `IntEnum` members: they print by name (`<Rounding.HALF_EVEN: 6>`) but are plain integers everywhere else,
+    so the numeric codes (`rnd=6`) keep working and the modes can be used inside `@njit` code.
+    `Q(...)` converts integer codes to members, and passing a `Rounding` member as `ovf` (or the reverse) raises a `TypeError`.
 
     ```python
     from pyfxp.constants import SAT, HALF_EVEN
