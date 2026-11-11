@@ -186,73 +186,6 @@ def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndar
     return fxpt(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)
 
 
-@njit(cache=True, nogil=True)
-def _rnd_scalar(x, method=TRUNC):  # noqa: PLR0911, PLR0912, C901
-    if method == TRUNC:
-        return int(np.floor(x))
-    if method == CEIL:
-        return int(np.ceil(x))
-    if method == TO_ZERO:
-        return int(x)
-    if method == AWAY:
-        if x >= 0:
-            return int(np.ceil(x))
-        return int(-np.ceil(np.abs(x)))
-    # Round-to-nearest modes decide from floor(x) and frac = x - floor(x), which are
-    # both exact; x +/- 0.5 is not exact once |x| >= 2**52.
-    if method == HALF_UP:
-        floor_x = np.floor(x)
-        return int(floor_x + (x - floor_x >= RND_MIDPOINT))
-    if method == HALF_DOWN:
-        floor_x = np.floor(x)
-        return int(floor_x + (x - floor_x > RND_MIDPOINT))
-    if method == HALF_ZERO:
-        floor_x = np.floor(x)
-        frac = x - floor_x
-        return int(floor_x + (frac > RND_MIDPOINT or (frac == RND_MIDPOINT and floor_x < 0)))
-    if method == HALF_AWAY:
-        floor_x = np.floor(x)
-        frac = x - floor_x
-        return int(floor_x + (frac > RND_MIDPOINT or (frac == RND_MIDPOINT and floor_x >= 0)))
-    if method == HALF_EVEN:
-        return int(np.rint(x))  # IEEE round-to-nearest-even, exact for every float64
-    raise ValueError(f"invalid method: {method}")
-
-
-@njit(cache=True, nogil=True)
-def _rnd_array(x, method=TRUNC):
-    if method == TRUNC:  # Round towards -inf
-        x = np.floor(x)
-    elif method == CEIL:  # Round towards +inf
-        x = np.ceil(x)
-    elif method == TO_ZERO:
-        pass
-    elif method == AWAY:
-        ax = np.abs(x)
-        x = np.where(x >= 0, np.ceil(ax), -np.ceil(ax))
-    # See _rnd_scalar: decide from floor(x) and the exact fraction, not x +/- 0.5.
-    elif method == HALF_UP:
-        floor_x = np.floor(x)
-        x = floor_x + (x - floor_x >= RND_MIDPOINT)
-    elif method == HALF_DOWN:
-        floor_x = np.floor(x)
-        x = floor_x + (x - floor_x > RND_MIDPOINT)
-    elif method == HALF_ZERO:
-        floor_x = np.floor(x)
-        frac = x - floor_x
-        x = floor_x + ((frac > RND_MIDPOINT) | ((frac == RND_MIDPOINT) & (floor_x < 0)))
-    elif method == HALF_AWAY:
-        floor_x = np.floor(x)
-        frac = x - floor_x
-        x = floor_x + ((frac > RND_MIDPOINT) | ((frac == RND_MIDPOINT) & (floor_x >= 0)))
-    elif method == HALF_EVEN:
-        x = np.rint(x)  # IEEE round-to-nearest-even, exact for every float64
-    else:
-        raise ValueError(f"invalid method: {method}")
-
-    return x.astype(np.int64)
-
-
 MAX_WIDTH_SIGNED = 64
 """Widest supported signed format (`qi + qf`), limited by int64."""
 
@@ -281,55 +214,6 @@ def _width_params(signed: bool, w: int):
     if signed:
         return half, low, half - 1, -half
     return half, low, low, np.int64(0)
-
-
-@njit(cache=True, nogil=True)
-def _overflow_scalar(x: int, signed: bool = True, w: int = 16, method: int = WRAP):
-    half, low, upper, lower = _width_params(signed, w)
-
-    if method == WRAP:
-        if w == MAX_WIDTH_SIGNED:
-            return x  # every int64 is already a valid 64-bit signed value
-        x = x & low
-        if signed:
-            x = (x ^ half) - half  # sign-extend bit w-1
-    elif method == SAT:
-        if x > upper:
-            return upper
-        if x < lower:
-            return lower
-    elif method == ERROR:
-        if x > upper or x < lower:
-            raise OverflowError("Overflow!")
-    else:
-        raise ValueError(f"invalid method: {method}")
-
-    return x
-
-
-@njit(cache=True, nogil=True)
-def _overflow_array(x, signed: bool = True, w: int = 16, method: int = WRAP):
-    x = np.asarray(x, dtype=np.int64)
-    half, low, upper, lower = _width_params(signed, w)
-
-    if method == WRAP:
-        if w == MAX_WIDTH_SIGNED:
-            return x  # every int64 is already a valid 64-bit signed value
-        x = x & low
-        if signed:
-            x = (x ^ half) - half  # sign-extend bit w-1
-    elif method == SAT:
-        x[x > upper] = upper
-        x[x < lower] = lower
-    elif method == ERROR:
-        up = x > upper
-        low_ = x < lower
-        if np.any(up | low_):
-            raise OverflowError("Overflow!")
-    else:
-        raise ValueError(f"invalid method: {method}")
-
-    return x
 
 
 @njit(cache=True, nogil=True)
@@ -362,56 +246,114 @@ def _into_int64_range_scalar(x: float, w: int, method: int = WRAP) -> float:
     return -_TWO_63
 
 
-@njit(cache=True, nogil=True)
-def _into_int64_range_array(x, w: int, method: int = WRAP):
-    """Array version of `_into_int64_range_scalar`; only touches out-of-range elements.
+_MAX_SHIFT_QF = 62  # largest qf whose scale 2**qf can be built with an int64 shift
 
-    NaN elements (including ±inf under WRAP, which becomes NaN) are set to 0 so the
-    integer steps stay defined. Returns `(x, nan_mask, has_nan)`; `nan_mask` is only
-    allocated when a NaN is found, so the common case costs one compare per element.
+
+@njit(cache=True, nogil=True)
+def _check_modes(rnd: int, ovf: int):
+    """Raise ValueError for an unknown rounding or overflow method.
+
+    The messages are constants on purpose: formatting the value into the message
+    (an f-string) costs about 2 ns per call even when nothing is raised. Calls from
+    Python get the value in the message from `fxpt` itself.
     """
-    flat = x.reshape(-1)  # view: x is a fresh contiguous array
-    has_nan = False
-    nan_mask = np.zeros(0, dtype=np.bool_)
-    for i in range(flat.size):
-        v = flat[i]
-        if v >= _TWO_63 or v < -_TWO_63:
-            v = _into_int64_range_scalar(v, w, method)
-            flat[i] = v
-        if v != v:  # NaN
-            if not has_nan:
-                has_nan = True
-                nan_mask = np.zeros(flat.size, dtype=np.bool_)
-            nan_mask[i] = True
-            flat[i] = 0.0
-    return x, nan_mask, has_nan
+    if rnd < TRUNC or rnd > HALF_AWAY:
+        raise ValueError("invalid method: unknown rounding method (see pyfxp.constants)")
+    if ovf < WRAP or ovf > ERROR:
+        raise ValueError("invalid method: unknown overflow method (see pyfxp.constants)")
+
+
+@njit(cache=True, nogil=True)
+def _scale(qf: int) -> float:
+    """Return 2.0**qf. An integer shift is much cheaper than pow() and lets LLVM vectorize callers."""
+    if 0 <= qf <= _MAX_SHIFT_QF:
+        return float(np.int64(1) << qf)
+    return 2.0**qf
+
+
+@njit(cache=True, nogil=True)
+def _quantize(x, scale: float, w: int, signed: bool, rnd: int, ovf: int):  # noqa: C901, PLR0911, PLR0912, PLR0913
+    """Quantize one value: the single kernel behind the scalar and the array paths.
+
+    `scale` is 2.0**qf and `w` is qi + qf. `rnd` and `ovf` must have been validated
+    with `_check_modes`. Returns a float on the 2**-qf grid (NaN for NaN input).
+    """
+    v = x * scale
+
+    # Rare cases first: NaN, +-inf and values outside the int64 range.
+    if not (-_TWO_63 <= v < _TWO_63):
+        v = _into_int64_range_scalar(v, w, ovf)
+        if v != v:  # NaN in, NaN out (also +-inf under WRAP)
+            return v
+
+    # Rounding, in floating point. floor(v) and v - floor(v) are both exact, which
+    # v +/- 0.5 is not once |v| >= 2**52.
+    if rnd == TRUNC:
+        r = np.floor(v)
+    elif rnd == CEIL:
+        r = np.ceil(v)
+    elif rnd == TO_ZERO:
+        r = np.trunc(v)
+    elif rnd == HALF_EVEN:
+        r = np.rint(v)  # IEEE round-to-nearest-even
+    else:
+        r = np.floor(v)
+        frac = v - r
+        # Bitwise & and | keep these branch-free; the data-dependent branches of
+        # `and` / `or` cost several ns per sample.
+        if rnd == AWAY:
+            r += (frac > 0.0) & (r >= 0.0)
+        elif rnd == HALF_UP:
+            r += frac >= RND_MIDPOINT
+        elif rnd == HALF_DOWN:
+            r += frac > RND_MIDPOINT
+        elif rnd == HALF_ZERO:
+            r += (frac > RND_MIDPOINT) | ((frac == RND_MIDPOINT) & (r < 0.0))
+        else:  # HALF_AWAY
+            r += (frac > RND_MIDPOINT) | ((frac == RND_MIDPOINT) & (r >= 0.0))
+
+    # r can be exactly 2**63 here (rounding up from just below it); keep the cast defined.
+    n = _INT64_MAX if r >= _TWO_63 else np.int64(r)
+
+    # Overflow, in int64.
+    half, low, upper, lower = _width_params(signed, w)
+    if ovf == SAT:
+        if n > upper:
+            n = upper
+        elif n < lower:
+            n = lower
+    elif ovf == WRAP:
+        if w != MAX_WIDTH_SIGNED:  # every int64 is already a valid 64-bit signed value
+            n = n & low
+            if signed:
+                n = (n ^ half) - half  # sign-extend bit w-1
+    elif n > upper or n < lower:  # ERROR
+        raise OverflowError("Overflow!")
+
+    return n / scale
 
 
 @njit(cache=True, nogil=True)
 def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
-    x = x * 2.0**qf
-    x, nan_mask, has_nan = _into_int64_range_array(x, w=(qi + qf), method=ovf)
+    """Quantize an array of any shape in one pass: one read and one write per element."""
+    _check_modes(rnd, ovf)
+    w = qi + qf
+    _width_params(signed, w)  # validate the width once, also for empty arrays
+    scale = _scale(qf)
 
-    x = _rnd_array(x, method=rnd)
-    x = _overflow_array(x, signed=signed, w=(qi + qf), method=ovf)
-
-    out = x / 2.0**qf
-    if has_nan:
-        out.reshape(-1)[nan_mask] = np.nan  # NaN in, NaN out
+    out = np.empty(x.shape, dtype=np.float64)
+    flat = out.reshape(-1)
+    i = 0
+    for v in x.flat:
+        flat[i] = _quantize(v, scale, w, signed, rnd, ovf)
+        i += 1
     return out
 
 
-@njit(cache=True, nogil=True)
+@njit(cache=True, nogil=True, inline="always")
 def _fxpt_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
-    x *= 2.0**qf
-    x = _into_int64_range_scalar(x, w=(qi + qf), method=ovf)
-    if x != x:  # NaN in, NaN out (also ±inf under WRAP)
-        return x
-
-    x = _rnd_scalar(x, method=rnd)
-    x = _overflow_scalar(x, signed=signed, w=(qi + qf), method=ovf)
-
-    return x / 2.0**qf
+    _check_modes(rnd, ovf)
+    return _quantize(x, _scale(qf), qi + qf, signed, rnd, ovf)
 
 
 def fxpt(  # noqa: PLR0913
@@ -480,6 +422,11 @@ def fxpt(  # noqa: PLR0913
     >>> fxpt(math.pi, 3, 4, signed=True, rnd=TRUNC, ovf=WRAP)  # Q3.4 format (3 integer bits, 4 fractional bits)
     3.125
     """
+    if not TRUNC <= rnd <= HALF_AWAY:
+        raise ValueError(f"invalid method: {rnd}")
+    if not WRAP <= ovf <= ERROR:
+        raise ValueError(f"invalid method: {ovf}")
+
     if isinstance(x, np.ndarray):
         return _fxpt_array(x, qi, qf, signed, rnd, ovf)
 
@@ -496,7 +443,7 @@ def fxpt(  # noqa: PLR0913
 
 
 # Numba's overload is used to decide when to call the array or the scalar function.
-@overload(fxpt)
+@overload(fxpt, inline="always")
 def fxp_overload(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913, ARG001
     # Array case
     if isinstance(x, types.Array):
@@ -522,7 +469,7 @@ def fxp_overload(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):
     raise TypeError(f"Unsupported type: {x}")
 
 
-@overload(fxp)
+@overload(fxp, inline="always")
 def _fxp_overload(x, spec):  # noqa: ARG001
     """Make `fxp` callable from user @njit code (it is a plain function at Python level)."""
 

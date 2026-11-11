@@ -27,7 +27,6 @@ import numpy as np
 import pytest
 
 from pyfxp import Q, fxp, fxpt
-from pyfxp._pyfxp import _rnd_array, _rnd_scalar
 
 from pyfxp.constants import HALF_EVEN
 
