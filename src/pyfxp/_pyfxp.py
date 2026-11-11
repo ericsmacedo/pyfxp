@@ -108,7 +108,6 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) 
     return FxpSpec(qi, qf, signed, rnd, ovf)
 
 
-@njit(cache=True, nogil=True)
 def fxp(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
     """Convert a numeric value to fixed-point representation using a pre-defined fixed-point specification.
 
@@ -489,8 +488,13 @@ def fxpt(  # noqa: PLR0913
     if isinstance(x, np.ndarray):
         return _fxpt_array(x, qi, qf, signed, rnd, ovf)
 
-    if isinstance(x, float | int):
-        return _fxpt_scalar(x, qi, qf, signed, rnd, ovf)
+    if isinstance(x, float | int | np.integer | np.floating):
+        # float() gives one compiled specialization for every scalar type (and handles
+        # float16, which Numba can't type); the scaling step converts to float anyway.
+        return _fxpt_scalar(float(x), qi, qf, signed, rnd, ovf)
+
+    if isinstance(x, list | tuple):
+        return _fxpt_array(np.asarray(x, dtype=np.float64), qi, qf, signed, rnd, ovf)
 
     raise TypeError(f"Unsupported type: {x}")
 
@@ -512,4 +516,21 @@ def fxp_overload(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):
             return _fxpt_scalar(x, qi, qf, signed, rnd, ovf)  # pragma: no cover
 
         return impl
+
+    if isinstance(x, types.List | types.UniTuple):
+
+        def impl(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+            return _fxpt_array(np.asarray(x, dtype=np.float64), qi, qf, signed, rnd, ovf)  # pragma: no cover
+
+        return impl
     raise TypeError(f"Unsupported type: {x}")
+
+
+@overload(fxp)
+def _fxp_overload(x, spec):  # noqa: ARG001
+    """Make `fxp` callable from user @njit code (it is a plain function at Python level)."""
+
+    def impl(x, spec):
+        return fxpt(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)  # pragma: no cover
+
+    return impl

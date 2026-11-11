@@ -8,7 +8,7 @@ Tracked improvements for pyfxp. Tick an item and link its PR when it lands.
 - [x] Inputs with `|x| * 2**qf >= 2**63` gave wrong results in any format (#18), e.g. `fxpt(1e19, 8, 4, ovf=SAT)` → `-128.0` instead of `127.9375`.
 - [x] HALF_* rounding was wrong for scaled values >= 2**52 (#24).
 - [ ] Validate `qi` / `qf` (no negative values, total width ≥ 1).
-- [ ] Accept NumPy scalars (`np.integer`, `np.floating`) and array-likes (lists, tuples) as input.
+- [x] Accept NumPy scalars (`np.integer`, `np.floating`) and array-likes (lists, tuples) as input (#19).
 - [ ] Make overflow `ERROR` messages useful: include the value, the format and the valid range.
 
 ## Performance
