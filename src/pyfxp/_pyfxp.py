@@ -215,12 +215,7 @@ def _rnd_scalar(x, method=TRUNC):  # noqa: PLR0911, PLR0912, C901
         frac = x - floor_x
         return int(floor_x + (frac > RND_MIDPOINT or (frac == RND_MIDPOINT and floor_x >= 0)))
     if method == HALF_EVEN:
-        floor_x = np.floor(x)
-        frac = x - floor_x
-        is_half = frac == RND_MIDPOINT
-        if is_half:
-            return int(floor_x + (floor_x % 2 == 1))
-        return int(np.round(x))
+        return int(np.rint(x))  # IEEE round-to-nearest-even, exact for every float64
     raise ValueError(f"invalid method: {method}")
 
 
@@ -251,15 +246,7 @@ def _rnd_array(x, method=TRUNC):
         frac = x - floor_x
         x = floor_x + ((frac > RND_MIDPOINT) | ((frac == RND_MIDPOINT) & (floor_x >= 0)))
     elif method == HALF_EVEN:
-        floor_x = np.floor(x)
-        frac = x - floor_x
-        is_half = frac == RND_MIDPOINT
-        even_correction = floor_x % 2 == 1  # if odd, add 1 to make even
-        x = np.where(
-            is_half,
-            floor_x + even_correction,
-            np.round(x),  # normal round otherwise (to nearest)
-        )
+        x = np.rint(x)  # IEEE round-to-nearest-even, exact for every float64
     else:
         raise ValueError(f"invalid method: {method}")
 

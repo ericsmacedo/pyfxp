@@ -18,7 +18,7 @@ Baseline numbers come from `uv run inv bench`.
 - [ ] Speed up the per-sample path inside `@njit` code: 19–26 ns/sample today vs 0.7 ns for a hand-written loop (~30×).
 - [x] Find out why `WRAP` costs ~7 ns/sample more than `SAT` in the scalar path (fixed by the new mask computation).
 - [ ] Convert large arrays in a single loop instead of chained NumPy temporaries (3–5× slower than NumPy at 1M elements).
-- [ ] Remove the redundant `HALF_EVEN` special case (`np.round` already rounds ties to even).
+- [x] Remove the redundant `HALF_EVEN` special case (`np.round` already rounds ties to even) (#32).
 - [ ] Merge the duplicated scalar and array implementations.
 
 ## API / user experience
