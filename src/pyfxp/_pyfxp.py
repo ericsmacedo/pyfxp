@@ -21,7 +21,8 @@
 # SOFTWARE.
 
 
-from typing import NamedTuple
+from collections.abc import Sequence
+from typing import Any, NamedTuple, TypeAlias
 
 import numpy as np
 from numba import njit, types
@@ -30,6 +31,12 @@ from numba.extending import overload
 from .constants import AWAY, CEIL, ERROR, HALF_AWAY, HALF_DOWN, HALF_EVEN, HALF_UP, HALF_ZERO, SAT, TO_ZERO, TRUNC, WRAP
 
 RND_MIDPOINT = 0.5  # Threshold for half-way rounding
+
+Scalar: TypeAlias = float | int | np.integer | np.floating
+"""Scalar inputs: Python and NumPy integers and floats. They return a float."""
+
+ArrayLike: TypeAlias = np.ndarray | Sequence[float]
+"""Array inputs: NumPy arrays, lists and tuples. They return a float64 ndarray."""
 _TWO_63 = 2.0**63  # first float64 outside the int64 range
 _MAX_BELOW_TWO_63 = 2.0**63 - 1024.0  # largest float64 below 2**63
 
@@ -108,7 +115,7 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) 
     return FxpSpec(qi, qf, signed, rnd, ovf)
 
 
-def fxp(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
+def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndarray for arrays (see Returns)
     """Convert a numeric value to fixed-point representation using a pre-defined fixed-point specification.
 
     This function behaves like `fxpt`, but instead of requiring multiple
@@ -421,8 +428,8 @@ def _fxpt_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):
 
 
 def fxpt(  # noqa: PLR0913
-    x: float | np.ndarray, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP
-) -> float | np.ndarray:
+    x: Scalar | ArrayLike, qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP
+) -> Any:  # float for scalars, ndarray for arrays (see Returns)
     """Convert a numeric value to fixed-point representation using Q-format notation.
 
     Parameters
