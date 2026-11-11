@@ -26,7 +26,9 @@ from typing import Any, NamedTuple, TypeAlias
 
 import numpy as np
 from numba import njit, types
-from numba.extending import overload
+import math
+
+from numba.extending import overload, overload_attribute
 
 from .constants import (
     AWAY,
@@ -43,6 +45,8 @@ from .constants import (
     WRAP,
     Overflow,
     Rounding,
+    overflow_modes_inv,
+    rounding_modes_inv,
 )
 
 RND_MIDPOINT = 0.5  # Threshold for half-way rounding
@@ -57,13 +61,81 @@ _MAX_BELOW_TWO_63 = 2.0**63 - 1024.0  # largest float64 below 2**63
 
 
 class FxpSpec(NamedTuple):
-    """Fixed-point specification."""
+    """Fixed-point specification.
+
+    Usually created with `Q(...)`. Besides the five fields it has read-only
+    properties describing the format, which also work inside `@njit` code:
+
+    - `width`: total number of bits, `qi + qf`
+    - `lsb`: step between representable values, `2**-qf`
+    - `min_int`, `max_int`: range of the stored integer (exact Python ints)
+    - `min`, `max`: range of the real value, `min_int * lsb` and `max_int * lsb`
+
+    For formats wider than 53 bits, `min` and `max` are rounded to the nearest
+    float64; `min_int` and `max_int` stay exact.
+
+    The repr uses Q notation: `s` or `u` for signed/unsigned, `Qqi.qf`, then the
+    rounding and overflow modes. Use `spec._asdict()` for the field values.
+
+    Examples
+    --------
+    >>> from pyfxp import Q
+    >>> from pyfxp.constants import HALF_EVEN, SAT
+    >>> spec = Q(3, 13, True, HALF_EVEN, SAT)
+    >>> spec
+    sQ3.13(HALF_EVEN, SAT)
+    >>> spec.width, spec.lsb
+    (16, 0.0001220703125)
+    >>> spec.min_int, spec.max_int
+    (-32768, 32767)
+    >>> spec.min, spec.max
+    (-4.0, 3.9998779296875)
+    >>> Q(8, 0, signed=False)
+    uQ8.0(TRUNC, WRAP)
+    """
 
     qi: int
     qf: int
     signed: bool
     rnd: int
     ovf: int
+
+    def __repr__(self) -> str:
+        rnd = rounding_modes_inv.get(self.rnd, repr(self.rnd))
+        ovf = overflow_modes_inv.get(self.ovf, repr(self.ovf))
+        return f"{'s' if self.signed else 'u'}Q{self.qi}.{self.qf}({rnd}, {ovf})"
+
+    @property
+    def width(self) -> int:
+        """Total number of bits, `qi + qf` (the sign bit is part of `qi`)."""
+        return self.qi + self.qf
+
+    @property
+    def lsb(self) -> float:
+        """Step between representable values, `2**-qf`."""
+        return math.ldexp(1.0, -self.qf)
+
+    @property
+    def min_int(self) -> int:
+        """Smallest stored integer: `-2**(width-1)` if signed, else `0`."""
+        _check_width(self.signed, self.width)
+        return -(1 << (self.width - 1)) if self.signed else 0
+
+    @property
+    def max_int(self) -> int:
+        """Largest stored integer: `2**(width-1) - 1` if signed, else `2**width - 1`."""
+        _check_width(self.signed, self.width)
+        return (1 << (self.width - 1)) - 1 if self.signed else (1 << self.width) - 1
+
+    @property
+    def min(self) -> float:
+        """Smallest representable value, `min_int * lsb`."""
+        return math.ldexp(self.min_int, -self.qf)
+
+    @property
+    def max(self) -> float:
+        """Largest representable value, `max_int * lsb` (rounded to float64 above 53 bits)."""
+        return math.ldexp(self.max_int, -self.qf)
 
 
 def _check_mode_kinds(rnd, ovf) -> None:
@@ -241,6 +313,15 @@ _INT64_MAX = np.int64(2**63 - 1)
 _INT64_MIN = np.int64(-(2**63))
 
 
+_WIDTH_ERROR = "invalid format width (qi + qf): must be between 1 and 64 (signed) or 63 (unsigned)"
+
+
+def _check_width(signed: bool, w: int) -> None:
+    """Python-level version of the width check in `_width_params`."""
+    if w < 1 or w > (MAX_WIDTH_SIGNED if signed else MAX_WIDTH_UNSIGNED):
+        raise ValueError(_WIDTH_ERROR)
+
+
 @njit(cache=True, nogil=True)
 def _width_params(signed: bool, w: int):
     """Return (half, low, upper, lower) for a w-bit format without ever computing 1 << w.
@@ -251,7 +332,7 @@ def _width_params(signed: bool, w: int):
     """
     max_w = MAX_WIDTH_SIGNED if signed else MAX_WIDTH_UNSIGNED
     if w < 1 or w > max_w:
-        raise ValueError("invalid format width (qi + qf): must be between 1 and 64 (signed) or 63 (unsigned)")
+        raise ValueError(_WIDTH_ERROR)
     if w == MAX_WIDTH_SIGNED:
         return _INT64_MIN, np.int64(-1), _INT64_MAX, _INT64_MIN
     half = np.int64(1) << (w - 1)
@@ -536,3 +617,49 @@ def _q_overload(qi, qf, signed=True, rnd=TRUNC, ovf=WRAP):  # noqa: ARG001
         return FxpSpec(qi, qf, signed, rnd, ovf)  # pragma: no cover
 
     return impl
+
+
+# FxpSpec properties inside @njit code. Plain Python properties are invisible to
+# Numba, so each one is registered again for both NamedTuple flavors Numba may
+# infer (NamedUniTuple when all five fields share a type).
+def _is_fxpspec(spec) -> bool:
+    return getattr(spec, "instance_class", None) is FxpSpec
+
+
+for _tuple_type in (types.NamedTuple, types.NamedUniTuple):
+
+    @overload_attribute(_tuple_type, "width", inline="always")
+    def _spec_width(spec):
+        if _is_fxpspec(spec):
+            return lambda spec: spec.qi + spec.qf  # pragma: no cover
+        return None
+
+    @overload_attribute(_tuple_type, "lsb", inline="always")
+    def _spec_lsb(spec):
+        if _is_fxpspec(spec):
+            return lambda spec: 1.0 / _scale(spec.qf)  # pragma: no cover
+        return None
+
+    @overload_attribute(_tuple_type, "min_int", inline="always")
+    def _spec_min_int(spec):
+        if _is_fxpspec(spec):
+            return lambda spec: _width_params(spec.signed, spec.qi + spec.qf)[3]  # pragma: no cover
+        return None
+
+    @overload_attribute(_tuple_type, "max_int", inline="always")
+    def _spec_max_int(spec):
+        if _is_fxpspec(spec):
+            return lambda spec: _width_params(spec.signed, spec.qi + spec.qf)[2]  # pragma: no cover
+        return None
+
+    @overload_attribute(_tuple_type, "min", inline="always")
+    def _spec_min(spec):
+        if _is_fxpspec(spec):
+            return lambda spec: _width_params(spec.signed, spec.qi + spec.qf)[3] / _scale(spec.qf)  # pragma: no cover
+        return None
+
+    @overload_attribute(_tuple_type, "max", inline="always")
+    def _spec_max(spec):
+        if _is_fxpspec(spec):
+            return lambda spec: _width_params(spec.signed, spec.qi + spec.qf)[2] / _scale(spec.qf)  # pragma: no cover
+        return None
