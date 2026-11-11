@@ -453,12 +453,13 @@ def fxpt(  # noqa: PLR0913
         - SAT (1): Saturate to maximum/minimum representable value.
         - ERROR (2): Raise an error if overflow occurs.
 
-    Returns:
+    Returns
     -------
     float or ndarray
-        Fixed-point representation of the input, as integer(s).
+        The quantized value(s), as float(s) on the `2**-qf` grid: a float for
+        scalar inputs, a float64 array for array, list and tuple inputs.
 
-    Notes:
+    Notes
     -----
     Uses ARM-style Q-format notation where a Qm.n format has:
         - m integer bits (qi) (including sign bit if signed=True)
