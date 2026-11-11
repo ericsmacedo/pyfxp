@@ -30,6 +30,8 @@ from numba.extending import overload
 from .constants import AWAY, CEIL, ERROR, HALF_AWAY, HALF_DOWN, HALF_EVEN, HALF_UP, HALF_ZERO, SAT, TO_ZERO, TRUNC, WRAP
 
 RND_MIDPOINT = 0.5  # Threshold for half-way rounding
+_TWO_63 = 2.0**63  # first float64 outside the int64 range
+_MAX_BELOW_TWO_63 = 2.0**63 - 1024.0  # largest float64 below 2**63
 
 
 class FxpSpec(NamedTuple):
@@ -190,18 +192,22 @@ def _rnd_scalar(x, method=TRUNC):  # noqa: PLR0911, PLR0912, C901
         if x >= 0:
             return int(np.ceil(x))
         return int(-np.ceil(np.abs(x)))
+    # Round-to-nearest modes decide from floor(x) and frac = x - floor(x), which are
+    # both exact; x +/- 0.5 is not exact once |x| >= 2**52.
     if method == HALF_UP:
-        return int(np.floor(x + RND_MIDPOINT))
+        floor_x = np.floor(x)
+        return int(floor_x + (x - floor_x >= RND_MIDPOINT))
     if method == HALF_DOWN:
-        return int(np.ceil(x - RND_MIDPOINT))
+        floor_x = np.floor(x)
+        return int(floor_x + (x - floor_x > RND_MIDPOINT))
     if method == HALF_ZERO:
-        if x >= 0:
-            return int(np.ceil(x - RND_MIDPOINT))
-        return int(-np.ceil(np.abs(x) - RND_MIDPOINT))
+        floor_x = np.floor(x)
+        frac = x - floor_x
+        return int(floor_x + (frac > RND_MIDPOINT or (frac == RND_MIDPOINT and floor_x < 0)))
     if method == HALF_AWAY:
-        if x >= 0:
-            return int(np.floor(x + RND_MIDPOINT))
-        return int(-np.floor(np.abs(x) + RND_MIDPOINT))
+        floor_x = np.floor(x)
+        frac = x - floor_x
+        return int(floor_x + (frac > RND_MIDPOINT or (frac == RND_MIDPOINT and floor_x >= 0)))
     if method == HALF_EVEN:
         floor_x = np.floor(x)
         frac = x - floor_x
@@ -223,16 +229,21 @@ def _rnd_array(x, method=TRUNC):
     elif method == AWAY:
         ax = np.abs(x)
         x = np.where(x >= 0, np.ceil(ax), -np.ceil(ax))
+    # See _rnd_scalar: decide from floor(x) and the exact fraction, not x +/- 0.5.
     elif method == HALF_UP:
-        x = np.floor(x + RND_MIDPOINT)
+        floor_x = np.floor(x)
+        x = floor_x + (x - floor_x >= RND_MIDPOINT)
     elif method == HALF_DOWN:
-        x = np.ceil(x - RND_MIDPOINT)
+        floor_x = np.floor(x)
+        x = floor_x + (x - floor_x > RND_MIDPOINT)
     elif method == HALF_ZERO:
-        ax = np.abs(x)
-        x = np.where(x >= 0, np.ceil(ax - RND_MIDPOINT), -np.ceil(ax - RND_MIDPOINT))
+        floor_x = np.floor(x)
+        frac = x - floor_x
+        x = floor_x + ((frac > RND_MIDPOINT) | ((frac == RND_MIDPOINT) & (floor_x < 0)))
     elif method == HALF_AWAY:
-        ax = np.abs(x)
-        x = np.where(x >= 0, np.floor(ax + RND_MIDPOINT), -np.floor(ax + RND_MIDPOINT))
+        floor_x = np.floor(x)
+        frac = x - floor_x
+        x = floor_x + ((frac > RND_MIDPOINT) | ((frac == RND_MIDPOINT) & (floor_x >= 0)))
     elif method == HALF_EVEN:
         floor_x = np.floor(x)
         frac = x - floor_x
@@ -329,8 +340,48 @@ def _overflow_array(x, signed: bool = True, w: int = 16, method: int = WRAP):
 
 
 @njit(cache=True, nogil=True)
+def _into_int64_range_scalar(x: float, w: int, method: int = WRAP) -> float:
+    """Bring a scaled value into the int64 range so the int64 cast in rounding is defined.
+
+    Values with |x| >= 2**63 are already integers and lie outside every supported
+    format, so:
+
+    - WRAP: reduce modulo 2**w (exact for floats), keeping the bits WRAP keeps.
+    - SAT / ERROR: clamp to the int64 range, which still saturates / raises
+      in the overflow step.
+
+    NaN is returned unchanged.
+    """
+    if not (x >= _TWO_63 or x < -_TWO_63):
+        return x
+    if method == WRAP:
+        m = 2.0**w
+        x = np.fmod(x, m)  # exact; |x| < 2**w afterwards
+        if x >= _TWO_63:  # only possible for w == 64
+            x -= m
+        elif x < -_TWO_63:
+            x += m
+        return x
+    if x > 0:
+        return _MAX_BELOW_TWO_63
+    return -_TWO_63
+
+
+@njit(cache=True, nogil=True)
+def _into_int64_range_array(x, w: int, method: int = WRAP):
+    """Array version of `_into_int64_range_scalar`; only touches out-of-range elements."""
+    flat = x.reshape(-1)  # view: x is a fresh contiguous array
+    for i in range(flat.size):
+        v = flat[i]
+        if v >= _TWO_63 or v < -_TWO_63:
+            flat[i] = _into_int64_range_scalar(v, w, method)
+    return x
+
+
+@njit(cache=True, nogil=True)
 def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     x = x * 2.0**qf
+    x = _into_int64_range_array(x, w=(qi + qf), method=ovf)
 
     x = _rnd_array(x, method=rnd)
     x = _overflow_array(x, signed=signed, w=(qi + qf), method=ovf)
@@ -341,6 +392,7 @@ def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP): 
 @njit(cache=True, nogil=True)
 def _fxpt_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     x *= 2.0**qf
+    x = _into_int64_range_scalar(x, w=(qi + qf), method=ovf)
 
     x = _rnd_scalar(x, method=rnd)
     x = _overflow_scalar(x, signed=signed, w=(qi + qf), method=ovf)
