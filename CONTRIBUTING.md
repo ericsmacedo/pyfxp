@@ -25,6 +25,17 @@ uv run inv all
 
 See `uv run inv --list` for any further details.
 
+### Benchmarks
+
+Run the benchmarks (best time per call and per element, compared to a plain NumPy baseline):
+
+```bash
+uv run inv bench
+uv run python benchmarks/bench_pyfxp.py --sizes 1000 100000 --repeat 7
+```
+
+Run them before and after performance-related changes and include the numbers in the pull request.
+
 
 ## Project Structure
 
@@ -33,6 +44,7 @@ The project contains these files and directories:
 | File/Directory | Description |
 |---|---|
 | `src/` | Python Package Sources - the files this is all about |
+| `benchmarks/` | Performance benchmarks (`uv run inv bench`) |
 | `pyproject.toml` | Python Package Meta File. Also contains all tool settings |
 | `task.py` | Invoke tasks.py file |
 | `.gitignore` | Lists of files and directories ignored by version control system |
