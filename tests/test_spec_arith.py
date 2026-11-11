@@ -56,6 +56,19 @@ def _is_minimal(values, spec):
     return not _fits(values, smaller) and (spec.signed is False or not _fits(values, narrower_unsigned))
 
 
+def _needed_width(values):
+    """Bits needed to hold every value (computed independently of the library)."""
+    lo, hi = min(values), max(values)
+    w = 1
+    if lo < 0:
+        while not (-(2 ** (w - 1)) <= lo and hi <= 2 ** (w - 1) - 1):
+            w += 1
+    else:
+        while hi > 2**w - 1:
+            w += 1
+    return w
+
+
 def _corners(a, b, op):
     if op == "mul":
         return [x * y for x in (a.min_int, a.max_int) for y in (b.min_int, b.max_int)]
@@ -70,8 +83,13 @@ def _corners(a, b, op):
 @given(a=specs(), b=specs())
 def test_binary_result_is_exact_and_minimal(op, a, b):
     """Every exact result fits the returned format, and one bit less would not be enough."""
-    r = getattr(a, op)(b)
     values = _corners(a, b, op)
+    if _needed_width(values) > (64 if min(values) < 0 else 63):
+        # e.g. operands whose fractional bits are far apart: the aligned result is too wide
+        with pytest.raises(ValueError, match="more than the"):
+            getattr(a, op)(b)
+        return
+    r = getattr(a, op)(b)
     assert r.qf == (a.qf + b.qf if op == "mul" else max(a.qf, b.qf))
     assert _fits(values, r)
     assert _is_minimal(values, r)

@@ -26,7 +26,7 @@ from fractions import Fraction
 
 import numpy as np
 import pytest
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 from numba import njit
 
@@ -48,9 +48,6 @@ from pyfxp.constants import (
     rounding_modes,
 )
 
-# Numba compiles on first call, which can exceed hypothesis' default deadline.
-settings.register_profile("pyfxp", deadline=None, max_examples=200)
-settings.load_profile("pyfxp")
 
 MAX_QF = 20
 MAX_WIDTH = 48  # well below the 53-bit float mantissa, so the reference is exact
