@@ -21,7 +21,8 @@
 # SOFTWARE.
 
 
-from typing import NamedTuple
+from collections.abc import Sequence
+from typing import Any, NamedTuple, TypeAlias
 
 import numpy as np
 from numba import njit, types
@@ -30,6 +31,12 @@ from numba.extending import overload
 from .constants import AWAY, CEIL, ERROR, HALF_AWAY, HALF_DOWN, HALF_EVEN, HALF_UP, HALF_ZERO, SAT, TO_ZERO, TRUNC, WRAP
 
 RND_MIDPOINT = 0.5  # Threshold for half-way rounding
+
+Scalar: TypeAlias = float | int | np.integer | np.floating
+"""Scalar inputs: Python and NumPy integers and floats. They return a float."""
+
+ArrayLike: TypeAlias = np.ndarray | Sequence[float]
+"""Array inputs: NumPy arrays, lists and tuples. They return a float64 ndarray."""
 _TWO_63 = 2.0**63  # first float64 outside the int64 range
 _MAX_BELOW_TWO_63 = 2.0**63 - 1024.0  # largest float64 below 2**63
 
@@ -108,8 +115,7 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP) 
     return FxpSpec(qi, qf, signed, rnd, ovf)
 
 
-@njit(cache=True, nogil=True)
-def fxp(x: float | np.ndarray, spec: FxpSpec) -> float | np.ndarray:
+def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndarray for arrays (see Returns)
     """Convert a numeric value to fixed-point representation using a pre-defined fixed-point specification.
 
     This function behaves like `fxpt`, but instead of requiring multiple
@@ -422,8 +428,8 @@ def _fxpt_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):
 
 
 def fxpt(  # noqa: PLR0913
-    x: float | np.ndarray, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP
-) -> float | np.ndarray:
+    x: Scalar | ArrayLike, qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP
+) -> Any:  # float for scalars, ndarray for arrays (see Returns)
     """Convert a numeric value to fixed-point representation using Q-format notation.
 
     Parameters
@@ -489,8 +495,13 @@ def fxpt(  # noqa: PLR0913
     if isinstance(x, np.ndarray):
         return _fxpt_array(x, qi, qf, signed, rnd, ovf)
 
-    if isinstance(x, float | int):
-        return _fxpt_scalar(x, qi, qf, signed, rnd, ovf)
+    if isinstance(x, float | int | np.integer | np.floating):
+        # float() gives one compiled specialization for every scalar type (and handles
+        # float16, which Numba can't type); the scaling step converts to float anyway.
+        return _fxpt_scalar(float(x), qi, qf, signed, rnd, ovf)
+
+    if isinstance(x, list | tuple):
+        return _fxpt_array(np.asarray(x, dtype=np.float64), qi, qf, signed, rnd, ovf)
 
     raise TypeError(f"Unsupported type: {x}")
 
@@ -512,4 +523,21 @@ def fxp_overload(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):
             return _fxpt_scalar(x, qi, qf, signed, rnd, ovf)  # pragma: no cover
 
         return impl
+
+    if isinstance(x, types.List | types.UniTuple):
+
+        def impl(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+            return _fxpt_array(np.asarray(x, dtype=np.float64), qi, qf, signed, rnd, ovf)  # pragma: no cover
+
+        return impl
     raise TypeError(f"Unsupported type: {x}")
+
+
+@overload(fxp)
+def _fxp_overload(x, spec):  # noqa: ARG001
+    """Make `fxp` callable from user @njit code (it is a plain function at Python level)."""
+
+    def impl(x, spec):
+        return fxpt(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)  # pragma: no cover
+
+    return impl
