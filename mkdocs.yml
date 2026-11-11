@@ -37,6 +37,7 @@ nav:
         - fpxt: api/fxpt.md
         - Q: api/Q.md
         - FxpSpec: api/FxpSpec.md
+        - Raw integers: api/raw.md
       - Constants: api/constants.md
 
 plugins:

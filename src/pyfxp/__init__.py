@@ -22,10 +22,17 @@
 """pyfxp package."""
 
 from ._pyfxp import fxp, fxpt, Q, FxpSpec
+from ._raw import from_bin, from_hex, from_int, to_bin, to_hex, to_int
 
 __all__ = [
     "fxp",
     "fxpt",
     "Q",
     "FxpSpec",
+    "to_int",
+    "from_int",
+    "to_bin",
+    "to_hex",
+    "from_bin",
+    "from_hex",
 ]

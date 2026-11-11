@@ -53,6 +53,32 @@ y2 = fxp(np.array([0.1, 0.2, 0.3]), Q3_13)
 
 ---
 
+## Format helpers and bit growth
+
+An [FxpSpec](FxpSpec.md) describes its own range, and computes the full-precision
+format of an operation, so intermediate results never round or overflow by accident:
+
+```python
+from pyfxp import Q, fxp
+
+a = Q(4, 5)                  # sQ4.5(TRUNC, WRAP)
+b = Q(7, 5)
+
+a.min, a.max, a.lsb          # (-8.0, 7.96875, 0.03125)
+
+a.add(b)                     # sQ8.5   one growth bit
+a.mul(b)                     # sQ11.10 fractional bits add up
+a.acc(1024)                  # sQ14.5  sum of 1024 values
+a.neg()                      # sQ5.5   -min needs one more bit
+
+y = fxp(x1 * x2, a.mul(b))   # exact: no rounding, no overflow
+```
+
+Each method returns the smallest format that holds every possible exact result.
+The rounding and overflow modes are taken from the left operand.
+
+---
+
 ## The [`pyfxp.constants`](constants.md) module
 
 The `constants` module defines the rounding and overflow modes as the `IntEnum`s `Rounding` and `Overflow`.

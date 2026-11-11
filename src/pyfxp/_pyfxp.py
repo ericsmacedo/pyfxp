@@ -56,7 +56,6 @@ Scalar: TypeAlias = float | int | np.integer | np.floating
 ArrayLike: TypeAlias = np.ndarray | Sequence[float]
 """Array inputs: NumPy arrays, lists and tuples. They return a float64 ndarray."""
 _TWO_63 = 2.0**63  # first float64 outside the int64 range
-_MAX_BELOW_TWO_63 = 2.0**63 - 1024.0  # largest float64 below 2**63
 
 
 class FxpSpec(NamedTuple):
@@ -136,6 +135,90 @@ class FxpSpec(NamedTuple):
         """Largest representable value, `max_int * lsb` (rounded to float64 above 53 bits)."""
         return math.ldexp(self.max_int, -self.qf)
 
+    # Result formats of arithmetic (bit growth). Each method returns the smallest
+    # format that holds every possible exact result, so converting the result
+    # with it never rounds or overflows. rnd/ovf are taken from `self`.
+
+    def add(self, other: "FxpSpec") -> "FxpSpec":
+        """Full-precision format of `a + b` (a value of `self` plus a value of `other`).
+
+        >>> from pyfxp import Q
+        >>> Q(4, 5).add(Q(7, 5))
+        sQ8.5(TRUNC, WRAP)
+        >>> Q(4, 5, signed=False).add(Q(4, 5, signed=False))
+        uQ5.5(TRUNC, WRAP)
+        """
+        qf, (lo_a, hi_a), (lo_b, hi_b) = _aligned(self, other)
+        return _fit("add", lo_a + lo_b, hi_a + hi_b, qf, self)
+
+    def sub(self, other: "FxpSpec") -> "FxpSpec":
+        """Full-precision format of `a - b`. Always signed unless the result can't be negative.
+
+        >>> from pyfxp import Q
+        >>> Q(4, 5).sub(Q(4, 5))
+        sQ5.5(TRUNC, WRAP)
+        >>> Q(4, 5, signed=False).sub(Q(4, 5, signed=False))
+        sQ5.5(TRUNC, WRAP)
+        """
+        qf, (lo_a, hi_a), (lo_b, hi_b) = _aligned(self, other)
+        return _fit("sub", lo_a - hi_b, hi_a - lo_b, qf, self)
+
+    def mul(self, other: "FxpSpec") -> "FxpSpec":
+        """Full-precision format of `a * b`: the fractional bits add up.
+
+        >>> from pyfxp import Q
+        >>> Q(4, 5).mul(Q(7, 5))
+        sQ11.10(TRUNC, WRAP)
+        >>> Q(1, 15).mul(Q(1, 15))
+        sQ2.30(TRUNC, WRAP)
+        """
+        corners = [x * y for x in (self.min_int, self.max_int) for y in (other.min_int, other.max_int)]
+        return _fit("mul", min(corners), max(corners), self.qf + other.qf, self)
+
+    def neg(self) -> "FxpSpec":
+        """Full-precision format of `-a`. Needs one more bit, because `-min` is not representable.
+
+        >>> from pyfxp import Q
+        >>> Q(4, 5).neg()
+        sQ5.5(TRUNC, WRAP)
+        """
+        return _fit("neg", -self.max_int, -self.min_int, self.qf, self)
+
+    def acc(self, n: int) -> "FxpSpec":
+        """Full-precision format of a sum of `n` values of this format (an accumulator).
+
+        >>> from pyfxp import Q
+        >>> Q(4, 5).acc(1024)
+        sQ14.5(TRUNC, WRAP)
+        """
+        if n < 1:
+            raise ValueError(f"acc needs n >= 1, got {n}")
+        return _fit("acc", n * self.min_int, n * self.max_int, self.qf, self)
+
+
+def _aligned(a: FxpSpec, b: FxpSpec) -> tuple[int, tuple[int, int], tuple[int, int]]:
+    """Common qf of `a` and `b`, and both integer ranges expressed in units of 2**-qf."""
+    qf = max(a.qf, b.qf)
+    sa, sb = qf - a.qf, qf - b.qf
+    return qf, (a.min_int << sa, a.max_int << sa), (b.min_int << sb, b.max_int << sb)
+
+
+def _fit(op: str, lo: int, hi: int, qf: int, like: FxpSpec) -> FxpSpec:
+    """Smallest format with `qf` fractional bits whose integer range contains [lo, hi]."""
+    signed = lo < 0
+    if signed:
+        w = max((-lo - 1).bit_length(), hi.bit_length()) + 1
+    else:
+        w = max(hi.bit_length(), 1)
+    limit = MAX_WIDTH_SIGNED if signed else MAX_WIDTH_UNSIGNED
+    if w > limit:
+        kind = "signed" if signed else "unsigned"
+        raise ValueError(
+            f"{op}: the full-precision result needs {w} bits, more than the {limit}-bit limit for {kind} "
+            "formats; quantize an operand to a narrower format first"
+        )
+    return FxpSpec(w - qf, qf, signed, like.rnd, like.ovf)
+
 
 def _check_mode_kinds(rnd, ovf) -> None:
     """Raise TypeError when a rounding and an overflow mode are swapped.
@@ -147,6 +230,20 @@ def _check_mode_kinds(rnd, ovf) -> None:
         raise TypeError(f"rnd={rnd!r} is an overflow mode; did you swap rnd and ovf?")
     if isinstance(ovf, Rounding):
         raise TypeError(f"ovf={ovf!r} is a rounding mode; did you swap rnd and ovf?")
+
+
+def _validated_modes(rnd, ovf) -> tuple[int, int]:
+    """Validate rnd/ovf at Python level and return them as plain ints.
+
+    Plain ints for the compiled kernels: Numba's dispatcher types IntEnum
+    arguments ~10x slower than ints, which dominated scalar calls from Python.
+    """
+    _check_mode_kinds(rnd, ovf)
+    if not TRUNC <= rnd <= HALF_AWAY:
+        raise ValueError(f"invalid method: {rnd}")
+    if not WRAP <= ovf <= ERROR:
+        raise ValueError(f"invalid method: {ovf}")
+    return int(rnd), int(ovf)
 
 
 def Q(qi: int, qf: int, signed: bool = True, rnd: int | np.integer = TRUNC, ovf: int | np.integer = WRAP) -> FxpSpec:
@@ -342,33 +439,23 @@ def _width_params(signed: bool, w: int):
 
 
 @njit(cache=True, nogil=True)
-def _into_int64_range_scalar(x: float, w: int, method: int = WRAP) -> float:
-    """Bring a scaled value into the int64 range so the int64 cast in rounding is defined.
+def _wrap_huge(x: float, w: int) -> float:
+    """WRAP a scaled value with |x| >= 2**63 into the int64 range, keeping the bits WRAP keeps.
 
-    Values with |x| >= 2**63 are already integers and lie outside every supported
-    format, so:
-
-    - WRAP: reduce modulo 2**w (exact for floats), keeping the bits WRAP keeps.
-    - SAT / ERROR: clamp to the int64 range, which still saturates / raises
-      in the overflow step.
-
-    NaN is returned unchanged.
+    Such values are already integers and lie outside every supported format, so
+    reducing them modulo 2**w (exact for floats) gives the same result as wrapping
+    the exact integer. Only called by `_quantize_int`, for non-NaN values outside the
+    int64 range under WRAP. +-inf gives NaN (an infinite value has no defined wrap).
     """
-    if not (x >= _TWO_63 or x < -_TWO_63):
-        return x
-    if method == WRAP:
-        if np.isinf(x):
-            return np.nan  # an infinite value has no defined wrap
-        m = 2.0**w
-        x = np.fmod(x, m)  # exact; |x| < 2**w afterwards
-        if x >= _TWO_63:  # only possible for w == 64
-            x -= m
-        elif x < -_TWO_63:
-            x += m
-        return x
-    if x > 0:
-        return _MAX_BELOW_TWO_63
-    return -_TWO_63
+    if np.isinf(x):
+        return np.nan
+    m = 2.0**w
+    x = np.fmod(x, m)  # exact; |x| < 2**w afterwards
+    if x >= _TWO_63:  # only possible for w == 64
+        x -= m
+    elif x < -_TWO_63:
+        x += m
+    return x
 
 
 _MAX_SHIFT_QF = 62  # largest qf whose scale 2**qf can be built with an int64 shift
@@ -396,20 +483,50 @@ def _scale(qf: int) -> float:
     return 2.0**qf
 
 
-@njit(cache=True, nogil=True)
-def _quantize(x, scale: float, w: int, signed: bool, rnd: int, ovf: int):  # noqa: C901, PLR0911, PLR0912, PLR0913
-    """Quantize one value: the single kernel behind the scalar and the array paths.
+@njit(cache=True, nogil=True, inline="always")
+def _apply_overflow(n, w: int, signed: bool, ovf: int):
+    """Apply WRAP / SAT / ERROR to an int64 for a `w`-bit format."""
+    half, low, upper, lower = _width_params(signed, w)
+    if ovf == SAT:
+        if n > upper:
+            n = upper
+        elif n < lower:
+            n = lower
+    elif ovf == WRAP:
+        if w != MAX_WIDTH_SIGNED:  # every int64 is already a valid 64-bit signed value
+            n = n & low
+            if signed:
+                n = (n ^ half) - half  # sign-extend bit w-1
+    elif n > upper or n < lower:  # ERROR
+        raise OverflowError("Overflow!")
+    return n
+
+
+@njit(cache=True, nogil=True, inline="always")
+def _quantize_int(x, scale: float, w: int, signed: bool, rnd: int, ovf: int):  # noqa: C901, PLR0912, PLR0913
+    """Quantize one value to its stored integer: the single kernel behind every conversion.
 
     `scale` is 2.0**qf and `w` is qi + qf. `rnd` and `ovf` must have been validated
-    with `_check_modes`. Returns a float on the 2**-qf grid (NaN for NaN input).
+    with `_check_modes`. Returns `(n, ok)`: the int64 stored integer, and False if
+    the input was NaN (or +-inf under WRAP), in which case `n` is meaningless.
     """
     v = x * scale
 
-    # Rare cases first: NaN, +-inf and values outside the int64 range.
+    # Rare cases first: NaN, +-inf and values outside the int64 range. Those values
+    # are beyond every supported format (at most 64 bits), so SAT / ERROR are decided
+    # here: the int64 range check below could not see them for a 64-bit format.
     if not (-_TWO_63 <= v < _TWO_63):
-        v = _into_int64_range_scalar(v, w, ovf)
-        if v != v:  # NaN in, NaN out (also +-inf under WRAP)
-            return v
+        if v != v:  # NaN
+            return np.int64(0), False
+        if ovf == WRAP:
+            v = _wrap_huge(v, w)
+            if v != v:  # +-inf under WRAP
+                return np.int64(0), False
+        elif ovf == SAT:
+            _, _, upper, lower = _width_params(signed, w)
+            return (upper if v > 0 else lower), True
+        else:  # ERROR
+            raise OverflowError("Overflow!")
 
     # Rounding, in floating point. floor(v) and v - floor(v) are both exact, which
     # v +/- 0.5 is not once |v| >= 2**52.
@@ -439,22 +556,15 @@ def _quantize(x, scale: float, w: int, signed: bool, rnd: int, ovf: int):  # noq
 
     # r can be exactly 2**63 here (rounding up from just below it); keep the cast defined.
     n = _INT64_MAX if r >= _TWO_63 else np.int64(r)
+    return _apply_overflow(n, w, signed, ovf), True
 
-    # Overflow, in int64.
-    half, low, upper, lower = _width_params(signed, w)
-    if ovf == SAT:
-        if n > upper:
-            n = upper
-        elif n < lower:
-            n = lower
-    elif ovf == WRAP:
-        if w != MAX_WIDTH_SIGNED:  # every int64 is already a valid 64-bit signed value
-            n = n & low
-            if signed:
-                n = (n ^ half) - half  # sign-extend bit w-1
-    elif n > upper or n < lower:  # ERROR
-        raise OverflowError("Overflow!")
 
+@njit(cache=True, nogil=True)
+def _quantize(x, scale: float, w: int, signed: bool, rnd: int, ovf: int):  # noqa: PLR0913
+    """Quantize one value: a float on the 2**-qf grid (NaN in, NaN out)."""
+    n, ok = _quantize_int(x, scale, w, signed, rnd, ovf)
+    if not ok:
+        return np.nan
     return n / scale
 
 
@@ -479,6 +589,61 @@ def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP): 
 def _fxpt_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     _check_modes(rnd, ovf)
     return _quantize(x, _scale(qf), qi + qf, signed, rnd, ovf)
+
+
+# Raw-integer kernels (used by pyfxp._raw). They live in this file because Numba's
+# cache only notices changes to the file a cached function is defined in, not to
+# functions it inlines from other files.
+
+_NAN_ERROR = "NaN (or +-inf with WRAP) has no fixed-point integer representation"
+
+
+@njit(cache=True, nogil=True)
+def _to_int_scalar(x, qi: int, qf: int, signed: bool, rnd: int, ovf: int):  # noqa: PLR0913
+    _check_modes(rnd, ovf)
+    n, ok = _quantize_int(x, _scale(qf), qi + qf, signed, rnd, ovf)
+    if not ok:
+        raise ValueError(_NAN_ERROR)
+    return n
+
+
+@njit(cache=True, nogil=True)
+def _to_int_array(x, qi: int, qf: int, signed: bool, rnd: int, ovf: int):  # noqa: PLR0913
+    _check_modes(rnd, ovf)
+    w = qi + qf
+    _width_params(signed, w)  # validate the width once, also for empty arrays
+    scale = _scale(qf)
+    out = np.empty(x.shape, dtype=np.int64)
+    flat = out.reshape(-1)
+    i = 0
+    for v in x.flat:
+        n, ok = _quantize_int(v, scale, w, signed, rnd, ovf)
+        if not ok:
+            raise ValueError(_NAN_ERROR)
+        flat[i] = n
+        i += 1
+    return out
+
+
+@njit(cache=True, nogil=True)
+def _from_int_array(n, qi: int, qf: int, signed: bool, ovf: int):
+    _check_modes(0, ovf)
+    w = qi + qf
+    _width_params(signed, w)
+    scale = _scale(qf)
+    out = np.empty(n.shape, dtype=np.float64)
+    flat = out.reshape(-1)
+    i = 0
+    for v in n.flat:
+        flat[i] = _apply_overflow(np.int64(v), w, signed, ovf) / scale
+        i += 1
+    return out
+
+
+@njit(cache=True, nogil=True)
+def _from_int_scalar(n, qi: int, qf: int, signed: bool, ovf: int):
+    _check_modes(0, ovf)
+    return _apply_overflow(np.int64(n), qi + qf, signed, ovf) / _scale(qf)
 
 
 def fxpt(  # noqa: PLR0913
@@ -547,14 +712,7 @@ def fxpt(  # noqa: PLR0913
     >>> fxpt(math.pi, 3, 4, signed=True, rnd=TRUNC, ovf=WRAP)  # Q3.4 format (3 integer bits, 4 fractional bits)
     3.125
     """
-    _check_mode_kinds(rnd, ovf)
-    if not TRUNC <= rnd <= HALF_AWAY:
-        raise ValueError(f"invalid method: {rnd}")
-    if not WRAP <= ovf <= ERROR:
-        raise ValueError(f"invalid method: {ovf}")
-    # Plain ints for the compiled kernel: Numba's dispatcher types IntEnum
-    # arguments ~10x slower than ints, which dominated scalar calls from Python.
-    rnd, ovf = int(rnd), int(ovf)
+    rnd, ovf = _validated_modes(rnd, ovf)
 
     if isinstance(x, np.ndarray):
         return _fxpt_array(x, qi, qf, signed, rnd, ovf)
