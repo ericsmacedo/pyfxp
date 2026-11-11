@@ -249,3 +249,59 @@ def test_ties_exhaustive(rnd, signed):
     expected = [ref_fxp(x, qi, qf, signed, rnd, SAT) for x in xs]
     assert [fxpt(x, qi, qf, signed, rnd, SAT) for x in xs] == expected
     assert np.asarray(fxpt(np.array(xs), qi, qf, signed, rnd, SAT)).tolist() == expected
+
+
+@st.composite
+def wide_spec_and_value(draw):
+    """Formats wider than the float mantissa (54..64 bits), with values whose scaled magnitude fits in int64."""
+    signed = draw(st.booleans())
+    w = draw(st.integers(54, 64 if signed else 63))
+    qf = draw(st.integers(0, w))
+    spec = FxpSpec(
+        qi=w - qf,
+        qf=qf,
+        signed=signed,
+        rnd=draw(st.sampled_from(sorted(rounding_modes.values()))),
+        ovf=draw(st.sampled_from((WRAP, SAT))),
+    )
+    limit = 2.0 ** (62 - qf)  # keep x * 2**qf below 2**62
+    x = draw(st.floats(-limit, limit, allow_nan=False, allow_infinity=False))
+    return spec, x
+
+
+@given(wide_spec_and_value())
+def test_wide_formats_match_reference(case):
+    """Formats up to 64 bits (signed) / 63 bits (unsigned) are exact, scalar and array."""
+    spec, x = case
+    expected = ref_fxp(x, *spec)
+    assert fxp(x, spec) == expected
+    assert np.asarray(fxp(np.array([x]), spec)).tolist() == [expected]
+
+
+@pytest.mark.parametrize(
+    ("qi", "qf", "signed", "expected"),
+    [
+        (40, 24, True, 1.0),  # 64-bit signed
+        (40, 23, False, 1.0),  # 63-bit unsigned
+        (4, 60, True, -(2.0**-30)),  # 64-bit signed, mostly fractional
+    ],
+)
+@pytest.mark.parametrize("ovf", [WRAP, SAT])
+@pytest.mark.parametrize("as_array", [False, True])
+def test_wide_format_examples(qi, qf, signed, expected, ovf, as_array):
+    """Known values at the maximum widths, which used to return garbage."""
+    x = np.array([expected]) if as_array else expected
+    y = fxpt(x, qi, qf, signed, TRUNC, ovf)
+    assert np.asarray(y).tolist() == ([expected] if as_array else expected)
+
+
+@pytest.mark.parametrize(
+    ("qi", "qf", "signed"),
+    [(40, 25, True), (40, 24, False), (70, 0, True), (0, 0, True), (0, 0, False)],
+)
+@pytest.mark.parametrize("as_array", [False, True])
+def test_invalid_width_raises(qi, qf, signed, as_array):
+    """Widths outside 1..64 (signed) / 1..63 (unsigned) raise instead of returning garbage."""
+    x = np.array([1.0]) if as_array else 1.0
+    with pytest.raises(ValueError, match="invalid format width"):
+        fxpt(x, qi, qf, signed)

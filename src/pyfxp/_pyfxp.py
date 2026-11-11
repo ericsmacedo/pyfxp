@@ -249,22 +249,46 @@ def _rnd_array(x, method=TRUNC):
     return x.astype(np.int64)
 
 
+MAX_WIDTH_SIGNED = 64
+"""Widest supported signed format (`qi + qf`), limited by int64."""
+
+MAX_WIDTH_UNSIGNED = 63
+"""Widest supported unsigned format (`qi + qf`), limited by int64."""
+
+_INT64_MAX = np.int64(2**63 - 1)
+_INT64_MIN = np.int64(-(2**63))
+
+
+@njit(cache=True, nogil=True)
+def _width_params(signed: bool, w: int):
+    """Return (half, low, upper, lower) for a w-bit format without ever computing 1 << w.
+
+    `half` is 2**(w-1) and `low` is a mask of w ones. For w <= 63 they are built from
+    `1 << (w - 1)` (at most 2**62), so no step overflows int64. A 64-bit signed format
+    spans all of int64 and is returned as constants.
+    """
+    max_w = MAX_WIDTH_SIGNED if signed else MAX_WIDTH_UNSIGNED
+    if w < 1 or w > max_w:
+        raise ValueError("invalid format width (qi + qf): must be between 1 and 64 (signed) or 63 (unsigned)")
+    if w == MAX_WIDTH_SIGNED:
+        return _INT64_MIN, np.int64(-1), _INT64_MAX, _INT64_MIN
+    half = np.int64(1) << (w - 1)
+    low = half - 1 + half
+    if signed:
+        return half, low, half - 1, -half
+    return half, low, low, np.int64(0)
+
+
 @njit(cache=True, nogil=True)
 def _overflow_scalar(x: int, signed: bool = True, w: int = 16, method: int = WRAP):
-    # Maximum and minimum values with w bits representation
-    if signed:
-        upper = (1 << (w - 1)) - 1
-        lower = -(1 << (w - 1))
-    else:
-        upper = (1 << w) - 1
-        lower = 0
+    half, low, upper, lower = _width_params(signed, w)
 
     if method == WRAP:
-        mask = 1 << w
-        x = x & (mask - 1)
+        if w == MAX_WIDTH_SIGNED:
+            return x  # every int64 is already a valid 64-bit signed value
+        x = x & low
         if signed:
-            if x >= (1 << (w - 1)):
-                return x | (-mask)
+            x = (x ^ half) - half  # sign-extend bit w-1
     elif method == SAT:
         if x > upper:
             return upper
@@ -282,27 +306,21 @@ def _overflow_scalar(x: int, signed: bool = True, w: int = 16, method: int = WRA
 @njit(cache=True, nogil=True)
 def _overflow_array(x, signed: bool = True, w: int = 16, method: int = WRAP):
     x = np.asarray(x, dtype=np.int64)
-
-    # Maximum and minimum values with w bits representation
-    if signed:
-        upper = (1 << (w - 1)) - 1
-        lower = -(1 << (w - 1))
-    else:
-        upper = (1 << w) - 1
-        lower = 0
+    half, low, upper, lower = _width_params(signed, w)
 
     if method == WRAP:
-        mask = 1 << w
-        x = x & (mask - 1)
+        if w == MAX_WIDTH_SIGNED:
+            return x  # every int64 is already a valid 64-bit signed value
+        x = x & low
         if signed:
-            x = np.where(x < (1 << (w - 1)), x, x | (-mask))
+            x = (x ^ half) - half  # sign-extend bit w-1
     elif method == SAT:
         x[x > upper] = upper
         x[x < lower] = lower
     elif method == ERROR:
         up = x > upper
-        low = x < lower
-        if np.any(up | low):
+        low_ = x < lower
+        if np.any(up | low_):
             raise OverflowError("Overflow!")
     else:
         raise ValueError(f"invalid method: {method}")
