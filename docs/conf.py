@@ -103,7 +103,7 @@ def _insert_readme(app, docname, source):  # noqa: ARG001
 # file. Both are written next to the HTML. Autodoc directives are replaced by the docstrings
 # themselves, so llms-full.txt carries the complete API reference.
 
-_BASE_URL = "https://pyfxp.readthedocs.io/en/latest/"
+_BASE_URL = "https://pyfxp.readthedocs.io/en/stable/"
 _SUMMARY = (
     "pyfxp is a bit-true fixed-point arithmetic library for Python. Values stay plain floats and "
     "NumPy arrays: fxp(x, Q(qi, qf, signed, rnd, ovf)) quantizes them to an ARM-style Q format (the sign "
