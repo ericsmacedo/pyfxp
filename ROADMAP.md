@@ -65,7 +65,23 @@ What still separates the package from a stable 1.0 (checked against `main`):
 - [x] Ship a `py.typed` marker, so type checkers use the annotations (#53).
 - [x] Package metadata: `Intended Audience`, `Topic` and `Typing :: Typed` classifiers, and `keywords` (#53).
 - [x] Set `Development Status :: 5 - Production/Stable`.
-- [ ] Python 3.14: add it to the CI matrix and classifiers once the minimum supported Numba version supports it.
 - [x] Docs URLs: everything (README, `pyproject.toml`, llms.txt) points to `/en/stable/`, the docs of the latest release. The Read the Docs `latest` build of the new Sphinx config works (Furo, `dirhtml` URLs, `llms.txt`); `stable` switches to it with the 1.0 tag.
-- [ ] Release dry run: build the sdist and wheel, and check the README on PyPI's renderer (GitHub alerts like `> [!NOTE]` show as plain quotes there).
-- [ ] Close or defer the remaining open items above, so 1.0 doesn't ship with a known-wrong error message.
+- [x] Overflow `ERROR` messages name the value, the format and the range (#56).
+- [ ] README as a front page like the docs, with the comparison (#60).
+- [ ] User guide: call pyfxp on arrays or inside `@njit` code (see Documentation).
+- [ ] Release dry run: build the sdist and wheel, and check the README on PyPI's renderer (GitHub alerts like `> [!NOTE]` show as plain quotes there; the chart shows only its light version).
+
+### Release steps
+
+- [ ] Replace `Unreleased` in `CHANGELOG.md` with the release date.
+- [ ] Tag `v1.0.0` on `main` and publish to PyPI.
+- [ ] Check that Read the Docs builds `stable` from the tag with the Sphinx docs, so the `/en/stable/` links work (`llms.txt`, `comparison/`, `api/stability/` return 404 until then).
+- [ ] Check the PyPI page: README, classifiers, project links.
+
+### Deferred to after 1.0
+
+New features are minor releases under SemVer, so these don't block 1.0:
+
+- Vectorize the array loop (Performance).
+- `check(x, spec)`, complex numbers, the spec-tracking wrapper type (#44) (API / user experience).
+- Python 3.14: add it to the CI matrix and classifiers once the minimum supported Numba version supports it.
