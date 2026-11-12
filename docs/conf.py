@@ -85,9 +85,10 @@ def _alert_to_admonition(match: re.Match) -> str:
 
 def _readme_for_docs() -> str:
     text = _ALERT.sub(_alert_to_admonition, _README.read_text(encoding="utf-8"))
-    # The getting-started page has its own title: start at the first "##" section,
-    # after the README's badges, title and intro (the landing page covers those).
-    text = text[text.index("\n## ") + 1 :]
+    # The getting-started page has its own title: start at "## Installation", and skip the
+    # README sections the landing page already shows (between the two "docs:" markers).
+    text = text[text.index("\n## Installation") + 1 :]
+    text = re.sub(r"<!-- docs: the landing page.*?<!-- docs: end -->\n", "", text, flags=re.DOTALL)
     # Links into docs/ are written relative to the repository root for GitHub.
     return text.replace("](docs/", "](")
 
