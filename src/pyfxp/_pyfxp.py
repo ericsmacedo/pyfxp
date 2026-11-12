@@ -61,14 +61,24 @@ _TWO_63 = 2.0**63  # first float64 outside the int64 range
 class FxpSpec(NamedTuple):
     """Fixed-point specification.
 
-    Usually created with `Q(...)`. Besides the five fields it has read-only
-    properties describing the format, which also work inside `@njit` code:
+    Usually created with `Q(...)`. The read-only properties (`width`, `lsb`,
+    `min_int`, `max_int`, `min`, `max`) also work inside `@njit` code.
 
-    - `width`: total number of bits, `qi + qf`
-    - `lsb`: step between representable values, `2**-qf`
-    - `min_int`, `max_int`: range of the stored integer (exact Python ints)
-    - `min`, `max`: range of the real value, `min_int * lsb` and `max_int * lsb`
+    Attributes
+    ----------
+    qi : int
+        Number of integer bits, including the sign bit if `signed`.
+    qf : int
+        Number of fractional bits.
+    signed : bool
+        Whether the format is signed.
+    rnd : Rounding
+        Rounding method.
+    ovf : Overflow
+        Overflow handling method.
 
+    Notes
+    -----
     For formats wider than 53 bits, `min` and `max` are rounded to the nearest
     float64; `min_int` and `max_int` stay exact.
 
@@ -142,6 +152,18 @@ class FxpSpec(NamedTuple):
     def add(self, other: "FxpSpec") -> "FxpSpec":
         """Full-precision format of `a + b` (a value of `self` plus a value of `other`).
 
+        Parameters
+        ----------
+        other : FxpSpec
+            Format of the second operand `b`.
+
+        Returns
+        -------
+        FxpSpec
+            Smallest format that holds every exact sum; `rnd` and `ovf` are taken from `self`.
+
+        Examples
+        --------
         >>> from pyfxp import Q
         >>> Q(4, 5).add(Q(7, 5))
         sQ8.5(TRUNC, WRAP)
@@ -152,8 +174,20 @@ class FxpSpec(NamedTuple):
         return _fit("add", lo_a + lo_b, hi_a + hi_b, qf, self)
 
     def sub(self, other: "FxpSpec") -> "FxpSpec":
-        """Full-precision format of `a - b`. Always signed unless the result can't be negative.
+        """Full-precision format of `a - b`.
 
+        Parameters
+        ----------
+        other : FxpSpec
+            Format of the second operand `b`.
+
+        Returns
+        -------
+        FxpSpec
+            Smallest format that holds every exact difference. It is signed unless the result can't be negative.
+
+        Examples
+        --------
         >>> from pyfxp import Q
         >>> Q(4, 5).sub(Q(4, 5))
         sQ5.5(TRUNC, WRAP)
@@ -164,8 +198,20 @@ class FxpSpec(NamedTuple):
         return _fit("sub", lo_a - hi_b, hi_a - lo_b, qf, self)
 
     def mul(self, other: "FxpSpec") -> "FxpSpec":
-        """Full-precision format of `a * b`: the fractional bits add up.
+        """Full-precision format of `a * b`.
 
+        Parameters
+        ----------
+        other : FxpSpec
+            Format of the second operand `b`.
+
+        Returns
+        -------
+        FxpSpec
+            Smallest format that holds every exact product; the fractional bits add up.
+
+        Examples
+        --------
         >>> from pyfxp import Q
         >>> Q(4, 5).mul(Q(7, 5))
         sQ11.10(TRUNC, WRAP)
@@ -176,8 +222,15 @@ class FxpSpec(NamedTuple):
         return _fit("mul", min(corners), max(corners), self.qf + other.qf, self)
 
     def neg(self) -> "FxpSpec":
-        """Full-precision format of `-a`. Needs one more bit, because `-min` is not representable.
+        """Full-precision format of `-a`.
 
+        Returns
+        -------
+        FxpSpec
+            Format with one more integer bit, because `-min` is not representable.
+
+        Examples
+        --------
         >>> from pyfxp import Q
         >>> Q(4, 5).neg()
         sQ5.5(TRUNC, WRAP)
@@ -187,6 +240,23 @@ class FxpSpec(NamedTuple):
     def acc(self, n: int) -> "FxpSpec":
         """Full-precision format of a sum of `n` values of this format (an accumulator).
 
+        Parameters
+        ----------
+        n : int
+            Number of values summed.
+
+        Returns
+        -------
+        FxpSpec
+            Smallest format that holds every exact sum of `n` values.
+
+        Raises
+        ------
+        ValueError
+            If `n < 1`.
+
+        Examples
+        --------
         >>> from pyfxp import Q
         >>> Q(4, 5).acc(1024)
         sQ14.5(TRUNC, WRAP)
@@ -357,14 +427,20 @@ def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndar
     float or ndarray
         Fixed-point representation of the input value(s).
 
+    Raises
+    ------
+    OverflowError
+        With `ovf=ERROR`, if a value is outside the format's range.
+    ValueError
+        If the width or a mode code is invalid.
+
     Notes
     -----
     - `fxp(x, Q(qi, qf, signed, rnd, ovf))` is equivalent to
       `fxpt(x, qi, qf, signed, rnd, ovf)`.
-    - Uses ARM-style Q-format notation (Qm.n), where:
-        * m = `qi`  → number of integer bits (including signed bit if `signed=True`)
-        * n = `qf`  → number of fractional bits
-    - Designed to be fully compatible with Numba `@njit` mode
+    - Uses ARM-style Q-format notation (Qm.n): m = `qi` integer bits (including the
+      sign bit if `signed=True`) and n = `qf` fractional bits.
+    - Works inside Numba `@njit` code.
 
     Examples
     --------
@@ -672,16 +748,23 @@ def fxpt(  # noqa: PLR0913
         The quantized value(s), as float(s) on the `2**-qf` grid: a float for
         scalar inputs, a float64 array for array, list and tuple inputs.
 
+    Raises
+    ------
+    OverflowError
+        With `ovf=ERROR`, if a value is outside the format's range.
+    ValueError
+        If the width or a mode code is invalid.
+
     Notes
     -----
-    Uses ARM-style Q-format notation where a Qm.n format has:
-        - m integer bits (qi) (including sign bit if signed=True)
-        - n fractional bits (qf)
+    Uses ARM-style Q-format notation: a Qm.n format has m = `qi` integer bits
+    (including the sign bit if `signed=True`) and n = `qf` fractional bits.
 
     Non-finite inputs:
-        - NaN is returned unchanged, for every rounding and overflow mode.
-        - ±inf saturates to the max/min value with SAT, raises with ERROR,
-          and returns NaN with WRAP (an infinite value has no defined wrap).
+
+    - NaN is returned unchanged, for every rounding and overflow mode.
+    - ±inf saturates to the max/min value with SAT, raises with ERROR,
+      and returns NaN with WRAP (an infinite value has no defined wrap).
 
     Examples
     --------

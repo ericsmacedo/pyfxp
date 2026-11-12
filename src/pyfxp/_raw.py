@@ -156,8 +156,22 @@ def _pattern_strings(x, spec: FxpSpec, base: str, digits: int):
 def to_bin(x: Scalar | ArrayLike, spec: FxpSpec):
     """Quantize like `fxp` and return the two's-complement bit pattern as a binary string.
 
-    The string has exactly `spec.width` digits. Arrays give a string array of the same shape.
+    The string has exactly `spec.width` digits.
 
+    Parameters
+    ----------
+    x : int, float or array-like
+        The input value(s) to convert.
+    spec : FxpSpec
+        The fixed-point format, rounding and overflow modes (see `Q`).
+
+    Returns
+    -------
+    str or ndarray
+        A string for scalar inputs, a string array of the same shape otherwise.
+
+    Examples
+    --------
     >>> from pyfxp import Q, to_bin
     >>> to_bin(-1.3, Q(3, 4))
     '1101011'
@@ -171,8 +185,22 @@ def to_hex(x: Scalar | ArrayLike, spec: FxpSpec):
     """Quantize like `fxp` and return the two's-complement bit pattern as a hex string.
 
     The string is zero-padded to `ceil(width / 4)` lowercase digits, the format
-    `$readmemh` and VHDL `hread` expect. Arrays give a string array of the same shape.
+    `$readmemh` and VHDL `hread` expect.
 
+    Parameters
+    ----------
+    x : int, float or array-like
+        The input value(s) to convert.
+    spec : FxpSpec
+        The fixed-point format, rounding and overflow modes (see `Q`).
+
+    Returns
+    -------
+    str or ndarray
+        A string for scalar inputs, a string array of the same shape otherwise.
+
+    Examples
+    --------
     >>> from pyfxp import Q, to_hex
     >>> to_hex(-1.3, Q(3, 4))
     '6b'
@@ -203,9 +231,25 @@ def _from_pattern(s, spec: FxpSpec, base: int):
 def from_bin(s, spec: FxpSpec):
     """Real value(s) of two's-complement binary string(s) in the given format.
 
-    Underscores and a `0b` prefix are allowed. A string with more than `spec.width`
-    significant bits raises ValueError.
+    Parameters
+    ----------
+    s : str or array-like of str
+        Two's-complement bit pattern(s). Underscores and a `0b` prefix are allowed.
+    spec : FxpSpec
+        The fixed-point format (`rnd` and `ovf` are not used).
 
+    Returns
+    -------
+    float or ndarray
+        A float for a single string, a float64 array (same shape) otherwise.
+
+    Raises
+    ------
+    ValueError
+        If a string has more than `spec.width` significant bits.
+
+    Examples
+    --------
     >>> from pyfxp import Q, from_bin
     >>> from_bin("1101011", Q(3, 4))
     -1.3125
@@ -216,9 +260,25 @@ def from_bin(s, spec: FxpSpec):
 def from_hex(s, spec: FxpSpec):
     """Real value(s) of two's-complement hex string(s) in the given format.
 
-    Underscores and a `0x` prefix are allowed. A string with more than `spec.width`
-    significant bits raises ValueError.
+    Parameters
+    ----------
+    s : str or array-like of str
+        Two's-complement bit pattern(s). Underscores and a `0x` prefix are allowed.
+    spec : FxpSpec
+        The fixed-point format (`rnd` and `ovf` are not used).
 
+    Returns
+    -------
+    float or ndarray
+        A float for a single string, a float64 array (same shape) otherwise.
+
+    Raises
+    ------
+    ValueError
+        If a string has more than `spec.width` significant bits.
+
+    Examples
+    --------
     >>> from pyfxp import Q, from_hex
     >>> from_hex("6b", Q(3, 4))
     -1.3125
