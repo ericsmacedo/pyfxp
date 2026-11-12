@@ -8,6 +8,7 @@ authors = [
     {name = "Eric Macedo", email = "ericsmacedo@gmail.com"},
 ]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering",
@@ -49,6 +50,7 @@ keywords = [
 [project.urls]
 "Homepage" = "https://github.com/ericsmacedo/pyfxp"
 "Documentation" = "https://pyfxp.readthedocs.io/en/stable/"
+"Changelog" = "https://github.com/ericsmacedo/pyfxp/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/ericsmacedo/pyfxp/issues"
 
 [dependency-groups]
