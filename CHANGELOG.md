@@ -4,7 +4,7 @@ All notable changes to pyfxp. The format follows [Keep a Changelog](https://keep
 and from 1.0 on the project follows [Semantic Versioning](https://semver.org/): see
 [Public API and versioning](https://pyfxp.readthedocs.io/en/stable/api/stability/).
 
-## [1.0.0] - Unreleased
+## [1.0.0] - 2026-11-12
 
 First stable release. Code written for 0.2.1 keeps working, except for the points under
 **Changed**, which change results or behavior that was wrong or undefined before.
@@ -19,7 +19,7 @@ First stable release. Code written for 0.2.1 keeps working, except for the point
 - Arrays of any shape and memory layout (N-D, non-contiguous views, Fortran order, 0-d, empty). Before, anything but 1-D failed with a Numba `TypingError` (#26, #38).
 - Formats up to 64 bits signed and 63 bits unsigned (#15).
 - A `py.typed` marker, and `llms.txt` / `llms-full.txt` with the docs as plain text for AI assistants (#53).
-- Documentation: Sphinx with the Furo theme (#50), a comparison with other fixed-point libraries (#51), and the public API and SemVer policy (#55).
+- Documentation: Sphinx with the Furo theme (#50), a comparison with other fixed-point libraries (#51), the public API and SemVer policy (#55), and a README that works as a front page, with the comparison (#60).
 
 ### Changed
 
@@ -29,6 +29,8 @@ First stable release. Code written for 0.2.1 keeps working, except for the point
 - **`fxp` and `Q` are plain Python functions** with Numba overloads, instead of `@njit` dispatchers. They work the same from Python and inside `@njit` code, but dispatcher attributes such as `fxp.py_func` are gone (#29, #45).
 - **NaN and ±inf**: NaN is returned unchanged in every mode. ±inf saturates with `SAT`, raises `OverflowError` with `ERROR`, and gives NaN with `WRAP`. Before, they gave arbitrary values, e.g. `fxpt(nan, 8, 4, ovf=SAT)` returned `-128.0` (#27, #28).
 - **Formats wider than 64 bits** (63 unsigned) raise `ValueError`. Before, any format with `qi + qf >= 64` returned wrong values, e.g. `fxpt(1.0, 40, 30)` gave `-5.96e-08` (#15).
+- **Development Status** is `5 - Production/Stable` (#59).
+- **Docs links** point to `/en/stable/`, the docs of the latest release (#57).
 - **Overflow messages** with `ERROR` name the value, its index, the format and its range: `5.0 is out of range: the range of sQ3.4(TRUNC, ERROR) is [-4.0, 3.9375]` (was `Overflow!`) (#56).
 
 ### Fixed
@@ -48,5 +50,5 @@ First stable release. Code written for 0.2.1 keeps working, except for the point
 
 See the [GitHub releases](https://github.com/ericsmacedo/pyfxp/releases).
 
-[1.0.0]: https://github.com/ericsmacedo/pyfxp/compare/v0.2.1...HEAD
+[1.0.0]: https://github.com/ericsmacedo/pyfxp/compare/v0.2.1...v1.0.0
 [0.2.1]: https://github.com/ericsmacedo/pyfxp/releases/tag/v0.2.1

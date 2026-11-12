@@ -73,7 +73,7 @@ What still separates the package from a stable 1.0 (checked against `main`):
 
 ### Release steps
 
-- [ ] Replace `Unreleased` in `CHANGELOG.md` with the release date.
+- [x] Replace `Unreleased` in `CHANGELOG.md` with the release date (#62).
 - [ ] Tag `v1.0.0` on `main` and publish to PyPI.
 - [ ] Check that Read the Docs builds `stable` from the tag with the Sphinx docs, so the `/en/stable/` links work (`llms.txt`, `comparison/`, `api/stability/` return 404 until then).
 - [ ] Check the PyPI page: README, classifiers, project links.
