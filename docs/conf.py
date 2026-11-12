@@ -40,6 +40,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
+    "sphinx_design",
 ]
 
 myst_enable_extensions = ["colon_fence"]
@@ -58,6 +59,8 @@ intersphinx_mapping = {
 }
 
 exclude_patterns = ["_build"]
+html_static_path = ["_static"]
+html_css_files = ["custom.css"]
 
 html_theme = "furo"
 html_title = "pyfxp"
@@ -67,7 +70,7 @@ html_theme_options = {
     "source_directory": "docs/",
 }
 
-# ----------------------------------------------------------------------------- README as the landing page
+# ----------------------------------------------------------------------------- README as the getting-started page
 
 _README = Path(__file__).parent.parent / "README.md"
 _ALERT = re.compile(r"^> \[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\n((?:>.*\n?)*)", re.MULTILINE)
@@ -82,12 +85,15 @@ def _alert_to_admonition(match: re.Match) -> str:
 
 def _readme_for_docs() -> str:
     text = _ALERT.sub(_alert_to_admonition, _README.read_text(encoding="utf-8"))
+    # The getting-started page has its own title: start at the first "##" section,
+    # after the README's badges, title and intro (the landing page covers those).
+    text = text[text.index("\n## ") + 1 :]
     # Links into docs/ are written relative to the repository root for GitHub.
     return text.replace("](docs/", "](")
 
 
 def _insert_readme(app, docname, source):  # noqa: ARG001
-    if docname == "index":
+    if docname == "getting-started":
         source[0] = source[0].replace("<!-- README -->", _readme_for_docs())
 
 

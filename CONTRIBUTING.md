@@ -50,6 +50,14 @@ uv run python benchmarks/bench_pyfxp.py --sizes 1000 100000 --repeat 7
 
 Run them before and after performance-related changes and include the numbers in the pull request.
 
+To compare pyfxp with other Python fixed-point libraries (numfi, APyTypes, fxpmath,
+fixedpoint, spfpm), install the optional `bench` group. This redraws the charts used
+on the documentation's front page and comparison page:
+
+```bash
+uv run --group bench python benchmarks/compare_libraries.py
+```
+
 
 ## Project Structure
 
