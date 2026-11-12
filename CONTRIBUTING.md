@@ -58,6 +58,7 @@ The project contains these files and directories:
 | File/Directory | Description |
 |---|---|
 | `src/` | Python Package Sources - the files this is all about |
+| `AGENTS.md` | Guidance for AI coding agents: layout, commands and project-specific pitfalls (`CLAUDE.md` imports it) |
 | `docs/` | Documentation sources (Sphinx, `docs/conf.py`) |
 | `benchmarks/` | Performance benchmarks (`uv run inv bench`) |
 | `pyproject.toml` | Python Package Meta File. Also contains all tool settings |

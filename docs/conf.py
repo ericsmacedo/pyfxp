@@ -22,6 +22,8 @@
 
 """Sphinx configuration for the pyfxp documentation."""
 
+import importlib
+import inspect
 import re
 from importlib.metadata import version as package_version
 from pathlib import Path
@@ -89,5 +91,151 @@ def _insert_readme(app, docname, source):  # noqa: ARG001
         source[0] = source[0].replace("<!-- README -->", _readme_for_docs())
 
 
+# ----------------------------------------------------------------------------- llms.txt for AI assistants
+
+# https://llmstxt.org/: llms.txt is a short index of the docs, llms-full.txt the whole text in one
+# file. Both are written next to the HTML. Autodoc directives are replaced by the docstrings
+# themselves, so llms-full.txt carries the complete API reference.
+
+_BASE_URL = "https://pyfxp.readthedocs.io/en/latest/"
+_SUMMARY = (
+    "pyfxp is a bit-true fixed-point arithmetic library for Python. Values stay plain floats and "
+    "NumPy arrays: fxp(x, Q(qi, qf, signed, rnd, ovf)) quantizes them to an ARM-style Q format (the sign "
+    "bit counts in qi) with one of nine rounding modes and wrap / saturate / error on overflow. It is "
+    "compiled with Numba and also works inside user @njit code."
+)
+_KEY_FACTS = """\
+- Install: `pip install pyfxp`. Import: `from pyfxp import Q, fxp, fxpt, FxpSpec, to_int, from_int, to_hex`.
+- `Q(qi, qf, signed=True, rnd=TRUNC, ovf=WRAP)` builds an `FxpSpec`; `fxp(x, spec)` quantizes;
+  `fxpt(x, qi, qf, signed, rnd, ovf)` does the same without a spec.
+- Q format is ARM style: `qi` includes the sign bit. `Q(1, 15)` is a 16-bit signed fraction in [-1, 1).
+- Results are floats / float64 arrays on the 2**-qf grid, not a custom type. Arrays of any shape work.
+- Modes live in `pyfxp.constants`: rounding `TRUNC, CEIL, TO_ZERO, AWAY, HALF_UP, HALF_DOWN, HALF_EVEN,
+  HALF_ZERO, HALF_AWAY`; overflow `WRAP, SAT, ERROR`. They are IntEnums (`Rounding`, `Overflow`).
+- Widths up to 64 bits (signed) / 63 bits (unsigned). NaN propagates; +-inf saturates with SAT.
+- Bit growth: `a.add(b)`, `a.sub(b)`, `a.mul(b)`, `a.neg()`, `a.acc(n)` return the full-precision result format.
+- Raw integers for HDL: `to_int`, `from_int`, `to_bin`, `to_hex`, `from_bin`, `from_hex`.
+- Fast paths: call `fxp` on whole arrays, or call it per sample inside a Numba `@njit` function.
+  Calling it per value from plain Python costs about 1 us per call."""
+
+_AUTODOC = re.compile(r"```\{eval-rst\}\n\.\. auto(function|class|module):: (\S+)\n((?:   :.*\n)*)```")
+
+
+_SIGNATURE_NAMES = {
+    "float | int | numpy.integer | numpy.floating | numpy.ndarray | collections.abc.Sequence[float]": "Scalar | ArrayLike",
+    "int | numpy.integer": "int",
+    "pyfxp._pyfxp.FxpSpec": "FxpSpec",
+    "<Rounding.TRUNC: 0>": "TRUNC",
+    "<Overflow.WRAP: 0>": "WRAP",
+    "'FxpSpec'": "FxpSpec",
+    "(self, ": "(",
+    "(self)": "()",
+}
+
+
+def _signature(obj) -> str:
+    """inspect.signature with the type aliases and enum defaults written as in the docs."""
+    text = str(inspect.signature(obj))
+    for long, short in _SIGNATURE_NAMES.items():
+        text = text.replace(long, short)
+    return text
+
+
+def _object(path: str):
+    module, _, name = path.rpartition(".")
+    try:
+        return getattr(importlib.import_module(module), name)
+    except (ImportError, AttributeError):
+        return importlib.import_module(path)
+
+
+def _doc(obj) -> str:
+    return inspect.cleandoc(obj.__doc__ or "")
+
+
+def _render_autodoc(match: re.Match) -> str:
+    """Plain-text stand-in for an autodoc directive: signatures and docstrings."""
+    kind, path, options = match.group(1), match.group(2), match.group(3)
+    obj = _object(path)
+    if kind == "function":
+        return f"### `{path}{_signature(obj)}`\n\n{_doc(obj)}\n"
+    if kind == "class":
+        members = re.search(r":members: (.*)", options)
+        out = [f"### `{path}{_signature(obj)}`\n\n{_doc(obj)}\n"]
+        for name in [m.strip() for m in members.group(1).split(",")] if members else []:
+            member = inspect.getattr_static(obj, name)
+            func = member.fget if isinstance(member, property) else member
+            sig = "" if isinstance(member, property) else _signature(func)
+            out.append(f"#### `{obj.__name__}.{name}{sig}`\n\n{_doc(func)}\n")
+        return "\n".join(out)
+    # automodule: module docstring, then each class and its documented members
+    from sphinx.pycode import ModuleAnalyzer  # noqa: PLC0415
+
+    attr_docs = ModuleAnalyzer.for_module(path).find_attr_docs()
+    out = [_doc(obj) + "\n"]
+    for name, cls in inspect.getmembers(obj, inspect.isclass):
+        if cls.__module__ != path:
+            continue
+        out.append(f"### `{path}.{name}`\n\n{_doc(cls)}\n")
+        for (scope, attr), lines in attr_docs.items():
+            if scope == name:
+                out.append(f"- `{name}.{attr}` = {int(getattr(cls, attr))}: {' '.join(lines).strip()}")
+        out.append("")
+    return "\n".join(out)
+
+
+def _page_text(app, docname: str) -> str:
+    text = Path(app.env.doc2path(docname)).read_text(encoding="utf-8")
+    text = text.replace("<!-- README -->", _readme_for_docs())
+    doc_dir = Path(app.env.doc2path(docname)).parent
+    text = re.sub(  # inline MyST {include} directives
+        r"```\{include\} (\S+)\n```", lambda m: (doc_dir / m.group(1)).read_text(encoding="utf-8"), text
+    )
+    text = _AUTODOC.sub(_render_autodoc, text)
+    text = re.sub(r"```\{toctree\}.*?```\n?", "", text, flags=re.DOTALL)  # navigation only
+    text = re.sub(r"^%.*\n", "", text, flags=re.MULTILINE)  # MyST comments
+    return text.strip() + "\n"
+
+
+def _doc_order(app) -> list[str]:
+    """Documents in navigation order (depth-first through the toctrees)."""
+    order, seen = [], set()
+
+    def visit(doc):
+        if doc in seen:
+            return
+        seen.add(doc)
+        order.append(doc)
+        for child in app.env.toctree_includes.get(doc, []):
+            visit(child)
+
+    visit(app.config.root_doc)
+    return order
+
+
+def _url(docname: str) -> str:
+    if docname == "index":
+        return _BASE_URL
+    return _BASE_URL + docname.removesuffix("/index").removesuffix("index") + "/"
+
+
+def _write_llms_txt(app, exception):
+    if exception is not None or app.builder.format != "html":
+        return
+    out = Path(app.outdir)
+    docs = _doc_order(app)
+    titles = {d: app.env.titles[d].astext() for d in docs}
+    index = [f"# {project}", "", f"> {_SUMMARY}", "", _KEY_FACTS, "", "## Docs", ""]
+    index += [f"- [{titles[d]}]({_url(d)})" for d in docs]
+    index += ["", "## Optional", "", f"- [Full documentation as one text file]({_BASE_URL}llms-full.txt)", ""]
+    (out / "llms.txt").write_text("\n".join(index), encoding="utf-8")
+
+    full = [f"# {project} {release}", "", f"> {_SUMMARY}", "", _KEY_FACTS, ""]
+    for d in docs:
+        full += [f"<!-- page: {_url(d)} -->", "", _page_text(app, d)]
+    (out / "llms-full.txt").write_text("\n".join(full), encoding="utf-8")
+
+
 def setup(app):
     app.connect("source-read", _insert_readme)
+    app.connect("build-finished", _write_llms_txt)
