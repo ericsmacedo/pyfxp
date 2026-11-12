@@ -1,5 +1,7 @@
 # API Overview
 
+What is public, and what SemVer promises about it: [Public API and versioning](stability.md).
+
 `pyfxp` offers two ways to convert numbers to fixed-point:
 
 - **[fxpt](fxpt.md)** → “typed” (parameter-based)
@@ -127,4 +129,5 @@ Q
 FxpSpec
 raw
 constants
+stability
 ```

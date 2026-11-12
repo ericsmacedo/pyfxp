@@ -53,4 +53,4 @@ uv run --group bench python benchmarks/compare_libraries.py   # comparison with 
 
 - One change per pull request; link the issue it fixes.
 - Tick the matching item in `ROADMAP.md` when it lands.
-- Public API: `pyfxp.__all__` and `pyfxp.constants`. Everything else (`_pyfxp`, `_raw`) is private.
+- Public API: `pyfxp.__all__` and `pyfxp.constants`. Everything else (`_pyfxp`, `_raw`) is private. Results, mode codes and exception types are covered by SemVer (`docs/api/stability.md`): changing them needs a major release.

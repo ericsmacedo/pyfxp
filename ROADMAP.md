@@ -61,7 +61,7 @@ Baseline numbers come from `uv run inv bench`; the comparison with other librari
 What still separates the package from a stable 1.0 (checked against `main`):
 
 - [ ] Write a `CHANGELOG.md`. There is none, and 0.2.1 → 1.0 has user-visible changes: modes are `IntEnum`s (#42), the `FxpSpec` repr is now `sQ3.13(...)` (#40), `fxp` / `Q` are plain functions with Numba overloads (#29, #42), formats wider than 64 bits now raise instead of returning wrong values (#15), NaN / inf behavior (#28).
-- [ ] Define the public API: everything in `pyfxp.__all__` and `pyfxp.constants`; `pyfxp._pyfxp` / `pyfxp._raw` are private. State the SemVer promise (the README has a SemVer badge) in the docs.
+- [x] Define the public API: everything in `pyfxp.__all__` and `pyfxp.constants`; `pyfxp._pyfxp` / `pyfxp._raw` are private. State the SemVer promise (the README has a SemVer badge) in the docs. See `docs/api/stability.md`.
 - [x] Ship a `py.typed` marker, so type checkers use the annotations (#53).
 - [x] Package metadata: `Intended Audience`, `Topic` and `Typing :: Typed` classifiers, and `keywords` (#53).
 - [ ] Set `Development Status :: 5 - Production/Stable` when releasing 1.0.
