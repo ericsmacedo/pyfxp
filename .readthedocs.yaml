@@ -15,4 +15,4 @@ build:
     - pip install --no-cache-dir uv
     - uv run inv doc
     - mkdir _readthedocs
-    - cp -r site _readthedocs/html
+    - cp -r docs/_build/dirhtml _readthedocs/html

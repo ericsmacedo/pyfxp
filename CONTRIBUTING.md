@@ -25,6 +25,20 @@ uv run inv all
 
 See `uv run inv --list` for any further details.
 
+### Documentation
+
+The documentation is built with [Sphinx](https://www.sphinx-doc.org/) and the
+[Furo](https://pradyunsg.me/furo/) theme. Pages are Markdown (via MyST), and the
+API reference is generated from the docstrings (NumPy style).
+
+```bash
+uv run inv doc          # build into docs/_build/dirhtml (warnings are errors)
+uv run inv doc-serve    # live-reloading preview at http://127.0.0.1:8000
+```
+
+The landing page is the `README.md`. Use GitHub alerts (`> [!NOTE]`) for callouts
+there: they render on GitHub and are turned into admonitions in the docs.
+
 ### Benchmarks
 
 Run the benchmarks (best time per call and per element, compared to a plain NumPy baseline):
@@ -44,6 +58,7 @@ The project contains these files and directories:
 | File/Directory | Description |
 |---|---|
 | `src/` | Python Package Sources - the files this is all about |
+| `docs/` | Documentation sources (Sphinx, `docs/conf.py`) |
 | `benchmarks/` | Performance benchmarks (`uv run inv bench`) |
 | `pyproject.toml` | Python Package Meta File. Also contains all tool settings |
 | `task.py` | Invoke tasks.py file |

@@ -97,14 +97,14 @@ def checktypes(c):
 
 @task
 def doc(c):
-    """Build Documentation via mkdocs."""
-    run_cmd(c, f"{ENV} mkdocs build --strict", force_color=True)
+    """Build Documentation via Sphinx (warnings are errors)."""
+    run_cmd(c, f"{ENV} sphinx-build -W --keep-going -b dirhtml docs docs/_build/dirhtml", force_color=True)
 
 
 @task
 def doc_serve(c):
-    """Start Local Documentation Server via mkdocs."""
-    run_cmd(c, f"{ENV} mkdocs serve --strict", force_color=True)
+    """Start Local Documentation Server with live reload (sphinx-autobuild)."""
+    run_cmd(c, f"{ENV} sphinx-autobuild -b dirhtml --watch src docs docs/_build/dirhtml", force_color=True)
 
 
 @task

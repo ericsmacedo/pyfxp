@@ -14,3 +14,4 @@ docs.zip
 report.xml
 site/
 __pycache__/
+docs/_build/

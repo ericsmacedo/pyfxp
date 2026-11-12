@@ -1,2 +1,5 @@
-# Q function
-::: pyfxp.Q
+# Q
+
+```{eval-rst}
+.. autofunction:: pyfxp.Q
+```
