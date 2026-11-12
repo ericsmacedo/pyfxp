@@ -200,7 +200,37 @@ def _page_text(app, docname: str) -> str:
     text = _AUTODOC.sub(_render_autodoc, text)
     text = re.sub(r"```\{toctree\}.*?```\n?", "", text, flags=re.DOTALL)  # navigation only
     text = re.sub(r"^%.*\n", "", text, flags=re.MULTILINE)  # MyST comments
-    return text.strip() + "\n"
+    return _plain_layout(text).strip() + "\n"
+
+
+_ADMONITIONS = {"note", "tip", "important", "warning", "caution"}
+
+
+def _plain_layout(text: str) -> str:
+    """Turn layout-only MyST / sphinx-design markup into plain text (cards, buttons, images, fences)."""
+
+    def image(match: re.Match) -> str:
+        options = match.group(1)
+        if "only-dark" in options:  # the same chart is described once, by its light version
+            return ""
+        alt = re.search(r":alt: (.*)", options)
+        return f"[Image: {alt.group(1)}]\n" if alt else ""
+
+    text = re.sub(r"```\{image\} \S+\n((?::[\w-]+:.*\n)*)```\n?", image, text)
+    text = re.sub(r"```\{button-(?:ref|link)\}.*?```\n?", "", text, flags=re.DOTALL)
+
+    def fence(match: re.Match) -> str:
+        name, title = match.group(1), match.group(2).strip()
+        if name == "grid-item-card":
+            return f"**{title}**\n"
+        if name in _ADMONITIONS:
+            return f"**{name.title()}{': ' + title if title else ''}**\n"
+        return ""  # grid, grid-item, container: layout only
+
+    # opening colon fences with their option lines, then the closing fences
+    text = re.sub(r"^:{3,}\{([\w-]+)\}(.*)\n(?::[\w-]+:.*\n)*", fence, text, flags=re.MULTILINE)
+    text = re.sub(r"^:{3,}[ \t]*\n", "", text, flags=re.MULTILINE)
+    return re.sub(r"\n{3,}", "\n\n", text)
 
 
 def _doc_order(app) -> list[str]:
