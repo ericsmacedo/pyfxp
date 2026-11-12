@@ -344,32 +344,13 @@ def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndar
         The input value(s) to convert.
 
     spec : FxpSpec or tuple
-        A fixed-point specification tuple or named tuple with the following fields:
+        A fixed-point specification (usually created with `Q`) with the fields:
 
-        - qi : int
-          Number of integer bits (including sign bit if `signed=True`).
-        - qf : int
-          Number of fractional bits.
-        - signed : bool
-          Whether the fixed-point format is signed.
-        - rnd : int
-          Rounding method to apply.
-          Supported methods (same as in `fxpt`):
-              * TRUNC (0): Bit truncation; rounds toward negative infinity.
-              * CEIL (1): Round toward positive infinity.
-              * TO_ZERO (2): Round toward zero.
-              * AWAY (3): Round away from zero.
-              * HALF_UP (4): Round to nearest; ties toward positive infinity.
-              * HALF_DOWN (5): Round to nearest; ties toward negative infinity.
-              * HALF_EVEN (6): Round to nearest; ties to even.
-              * HALF_ZERO (7): Round to nearest; ties toward zero.
-              * HALF_AWAY (8): Round to nearest; ties away from zero.
-        - ovf : int
-          Overflow handling method.
-          Supported methods (same as in `fxpt`):
-              * WRAP (0): Wrap around.
-              * SAT (1): Saturate to max/min representable value.
-              * ERROR (2): Raise an error on overflow.
+        - `qi` (int): number of integer bits, including the sign bit if `signed=True`.
+        - `qf` (int): number of fractional bits.
+        - `signed` (bool): whether the format is signed.
+        - `rnd` (Rounding): rounding method, as in `fxpt`.
+        - `ovf` (Overflow): overflow handling method, as in `fxpt`.
 
     Returns
     -------

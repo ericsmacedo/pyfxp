@@ -23,9 +23,21 @@ y_rtl = from_hex(np.loadtxt("rtl_output.hex", dtype=str), spec)
 Unlike the float result, the integer from `to_int` is exact for every supported
 width (up to 64 bits signed / 63 bits unsigned).
 
-::: pyfxp.to_int
-::: pyfxp.from_int
-::: pyfxp.to_bin
-::: pyfxp.to_hex
-::: pyfxp.from_bin
-::: pyfxp.from_hex
+```{eval-rst}
+.. autofunction:: pyfxp.to_int
+```
+```{eval-rst}
+.. autofunction:: pyfxp.from_int
+```
+```{eval-rst}
+.. autofunction:: pyfxp.to_bin
+```
+```{eval-rst}
+.. autofunction:: pyfxp.to_hex
+```
+```{eval-rst}
+.. autofunction:: pyfxp.from_bin
+```
+```{eval-rst}
+.. autofunction:: pyfxp.from_hex
+```

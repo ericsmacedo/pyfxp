@@ -1,2 +1,5 @@
+# fxpt
 
-::: pyfxp.fxpt
+```{eval-rst}
+.. autofunction:: pyfxp.fxpt
+```

@@ -64,10 +64,11 @@ y = fxpt(
 )
 ```
 
-!!! note "ARM-style Q-format"
-    In ARM-style Q-format notation (used by `pyfxp`), the **sign bit is included** in the integer bit count `qi`.
-    Refer to [Q (number format)](https://en.wikipedia.org/wiki/Q_(number_format)) for more information.
-
+> [!NOTE]
+> **ARM-style Q-format**
+>
+> In ARM-style Q-format notation (used by `pyfxp`), the **sign bit is included** in the integer bit count `qi`.
+> Refer to [Q (number format)](https://en.wikipedia.org/wiki/Q_(number_format)) for more information.
 
 Use `fxp` when you want a reusable, readable definition. The fixed-point format is defined
 using the [`Q(...)`](https://pyfxp.readthedocs.io/en/latest/api/Q/) function once, and can be
@@ -117,12 +118,14 @@ all the following rounding and overflow modes are supported:
 The constants above are defined in the [`pyfxp.constants`](https://pyfxp.readthedocs.io/en/latest/api/constants/) module.
 They are used by both `fxpt` and `fxp` to specify fixed-point arithmetic behavior.
 
-!!! tip "Usage example"
-    The modes are `IntEnum` members: they print by name (`<Rounding.HALF_EVEN: 6>`) but are plain integers everywhere else,
-    so the numeric codes (`rnd=6`) keep working and the modes can be used inside `@njit` code.
-    `Q(...)` converts integer codes to members, and passing a `Rounding` member as `ovf` (or the reverse) raises a `TypeError`.
-
-    ```python
-    from pyfxp.constants import SAT, HALF_EVEN
-    fxpt(1.25, qi=3, qf=13, ovf=SAT, rnd=HALF_EVEN)
-    ```
+> [!TIP]
+> **Usage example**
+>
+> The modes are `IntEnum` members: they print by name (`<Rounding.HALF_EVEN: 6>`) but are plain integers everywhere else,
+> so the numeric codes (`rnd=6`) keep working and the modes can be used inside `@njit` code.
+> `Q(...)` converts integer codes to members, and passing a `Rounding` member as `ovf` (or the reverse) raises a `TypeError`.
+>
+> ```python
+> from pyfxp.constants import SAT, HALF_EVEN
+> fxpt(1.25, qi=3, qf=13, ovf=SAT, rnd=HALF_EVEN)
+> ```
