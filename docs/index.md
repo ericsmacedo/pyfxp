@@ -153,4 +153,5 @@ api/index
 :caption: Development
 
 contributing
+changelog
 ```
