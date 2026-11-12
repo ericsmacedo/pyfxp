@@ -8,6 +8,7 @@ authors = [
     {name = "Eric Macedo", email = "ericsmacedo@gmail.com"},
 ]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering",
