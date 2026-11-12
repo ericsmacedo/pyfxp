@@ -268,6 +268,8 @@ def plot(results: dict, out_dir: Path = STATIC) -> list[Path]:
         path = out_dir / f"compare-{mode}.svg"
         fig.savefig(path, transparent=True)
         plt.close(fig)
+        # Matplotlib leaves trailing spaces in SVG text; strip them so pre-commit stays clean.
+        path.write_text("\n".join(line.rstrip() for line in path.read_text().splitlines()) + "\n")
         paths.append(path)
     return paths
 
