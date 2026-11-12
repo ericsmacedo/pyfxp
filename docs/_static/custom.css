@@ -1,0 +1,20 @@
+/* Landing page */
+.hero-tagline p {
+  font-size: 1.35rem;
+  line-height: 1.4;
+  margin-top: 0;
+}
+
+.sd-card {
+  border-radius: 0.5rem;
+}
+
+.sd-card-body {
+  font-size: 0.95rem;
+}
+
+/* Feature tables: keep the check marks centered and compact */
+article table td,
+article table th {
+  padding: 0.35rem 0.6rem;
+}

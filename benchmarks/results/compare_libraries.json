@@ -1,0 +1,57 @@
+{
+  "format": "signed Q8.12, floor rounding, saturation",
+  "sizes": {
+    "array": 1000000,
+    "scalar_only_loop": 20000,
+    "calls": 5000,
+    "repeat": 11
+  },
+  "array_ns_per_value": {
+    "pyfxp": 4.998083999907976,
+    "fxpmath": 395.73839900003804,
+    "numfi": 5.120907999980773,
+    "APyTypes": 31.53110000016568,
+    "fixedpoint": 9283.387099992524,
+    "spfpm": 4180.803349993312
+  },
+  "per_call_ns": {
+    "pyfxp": 996.5498000383377,
+    "fxpmath": 85139.32799996837,
+    "numfi": 18688.300599978902,
+    "APyTypes": 387.17999996151775,
+    "fixedpoint": 9152.443999983007,
+    "spfpm": 3842.4515999849973,
+    "pyfxp in @njit": 5.013318000010258
+  },
+  "vectorized": {
+    "pyfxp": true,
+    "fxpmath": true,
+    "numfi": true,
+    "APyTypes": true,
+    "fixedpoint": false,
+    "spfpm": false
+  },
+  "same_results_as_pyfxp": {
+    "pyfxp": true,
+    "fxpmath": true,
+    "numfi": true,
+    "APyTypes": true,
+    "fixedpoint": true,
+    "spfpm": false
+  },
+  "machine": {
+    "python": "3.13.18",
+    "system": "Linux-6.18.44-fc-v378-x86_64-with-glibc2.39",
+    "cpu": "x86_64"
+  },
+  "versions": {
+    "pyfxp": "0.2.2.dev20+g8ba956a.d20261112",
+    "numpy": "2.3.4",
+    "numba": "0.62.1",
+    "fxpmath": "0.4.10",
+    "numfi": "0.5.0",
+    "apytypes": "0.5.1",
+    "fixedpoint": "1.0.1",
+    "spfpm": "1.8.0"
+  }
+}
