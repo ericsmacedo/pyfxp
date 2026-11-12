@@ -61,14 +61,24 @@ _TWO_63 = 2.0**63  # first float64 outside the int64 range
 class FxpSpec(NamedTuple):
     """Fixed-point specification.
 
-    Usually created with `Q(...)`. Besides the five fields it has read-only
-    properties describing the format, which also work inside `@njit` code:
+    Usually created with `Q(...)`. The read-only properties (`width`, `lsb`,
+    `min_int`, `max_int`, `min`, `max`) also work inside `@njit` code.
 
-    - `width`: total number of bits, `qi + qf`
-    - `lsb`: step between representable values, `2**-qf`
-    - `min_int`, `max_int`: range of the stored integer (exact Python ints)
-    - `min`, `max`: range of the real value, `min_int * lsb` and `max_int * lsb`
+    Attributes
+    ----------
+    qi : int
+        Number of integer bits, including the sign bit if `signed`.
+    qf : int
+        Number of fractional bits.
+    signed : bool
+        Whether the format is signed.
+    rnd : Rounding
+        Rounding method.
+    ovf : Overflow
+        Overflow handling method.
 
+    Notes
+    -----
     For formats wider than 53 bits, `min` and `max` are rounded to the nearest
     float64; `min_int` and `max_int` stay exact.
 
@@ -142,6 +152,18 @@ class FxpSpec(NamedTuple):
     def add(self, other: "FxpSpec") -> "FxpSpec":
         """Full-precision format of `a + b` (a value of `self` plus a value of `other`).
 
+        Parameters
+        ----------
+        other : FxpSpec
+            Format of the second operand `b`.
+
+        Returns
+        -------
+        FxpSpec
+            Smallest format that holds every exact sum; `rnd` and `ovf` are taken from `self`.
+
+        Examples
+        --------
         >>> from pyfxp import Q
         >>> Q(4, 5).add(Q(7, 5))
         sQ8.5(TRUNC, WRAP)
@@ -152,8 +174,20 @@ class FxpSpec(NamedTuple):
         return _fit("add", lo_a + lo_b, hi_a + hi_b, qf, self)
 
     def sub(self, other: "FxpSpec") -> "FxpSpec":
-        """Full-precision format of `a - b`. Always signed unless the result can't be negative.
+        """Full-precision format of `a - b`.
 
+        Parameters
+        ----------
+        other : FxpSpec
+            Format of the second operand `b`.
+
+        Returns
+        -------
+        FxpSpec
+            Smallest format that holds every exact difference. It is signed unless the result can't be negative.
+
+        Examples
+        --------
         >>> from pyfxp import Q
         >>> Q(4, 5).sub(Q(4, 5))
         sQ5.5(TRUNC, WRAP)
@@ -164,8 +198,20 @@ class FxpSpec(NamedTuple):
         return _fit("sub", lo_a - hi_b, hi_a - lo_b, qf, self)
 
     def mul(self, other: "FxpSpec") -> "FxpSpec":
-        """Full-precision format of `a * b`: the fractional bits add up.
+        """Full-precision format of `a * b`.
 
+        Parameters
+        ----------
+        other : FxpSpec
+            Format of the second operand `b`.
+
+        Returns
+        -------
+        FxpSpec
+            Smallest format that holds every exact product; the fractional bits add up.
+
+        Examples
+        --------
         >>> from pyfxp import Q
         >>> Q(4, 5).mul(Q(7, 5))
         sQ11.10(TRUNC, WRAP)
@@ -176,8 +222,15 @@ class FxpSpec(NamedTuple):
         return _fit("mul", min(corners), max(corners), self.qf + other.qf, self)
 
     def neg(self) -> "FxpSpec":
-        """Full-precision format of `-a`. Needs one more bit, because `-min` is not representable.
+        """Full-precision format of `-a`.
 
+        Returns
+        -------
+        FxpSpec
+            Format with one more integer bit, because `-min` is not representable.
+
+        Examples
+        --------
         >>> from pyfxp import Q
         >>> Q(4, 5).neg()
         sQ5.5(TRUNC, WRAP)
@@ -187,6 +240,23 @@ class FxpSpec(NamedTuple):
     def acc(self, n: int) -> "FxpSpec":
         """Full-precision format of a sum of `n` values of this format (an accumulator).
 
+        Parameters
+        ----------
+        n : int
+            Number of values summed.
+
+        Returns
+        -------
+        FxpSpec
+            Smallest format that holds every exact sum of `n` values.
+
+        Raises
+        ------
+        ValueError
+            If `n < 1`.
+
+        Examples
+        --------
         >>> from pyfxp import Q
         >>> Q(4, 5).acc(1024)
         sQ14.5(TRUNC, WRAP)
@@ -357,14 +427,20 @@ def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndar
     float or ndarray
         Fixed-point representation of the input value(s).
 
+    Raises
+    ------
+    OverflowError
+        With `ovf=ERROR`, if a value is outside the format's range.
+    ValueError
+        If the width or a mode code is invalid.
+
     Notes
     -----
     - `fxp(x, Q(qi, qf, signed, rnd, ovf))` is equivalent to
       `fxpt(x, qi, qf, signed, rnd, ovf)`.
-    - Uses ARM-style Q-format notation (Qm.n), where:
-        * m = `qi`  → number of integer bits (including signed bit if `signed=True`)
-        * n = `qf`  → number of fractional bits
-    - Designed to be fully compatible with Numba `@njit` mode
+    - Uses ARM-style Q-format notation (Qm.n): m = `qi` integer bits (including the
+      sign bit if `signed=True`) and n = `qf` fractional bits.
+    - Works inside Numba `@njit` code.
 
     Examples
     --------
@@ -391,6 +467,11 @@ _INT64_MIN = np.int64(-(2**63))
 
 
 _WIDTH_ERROR = "invalid format width (qi + qf): must be between 1 and 64 (signed) or 63 (unsigned)"
+
+# Compiled code raises this constant message (formatting in a kernel costs time on every
+# call). The Python-level functions catch it and raise `_overflow_error` instead, which
+# names the value, the format and its range.
+_OVERFLOW_ERROR = "value out of range of the fixed-point format (ovf=ERROR)"
 
 
 def _check_width(signed: bool, w: int) -> None:
@@ -479,7 +560,7 @@ def _apply_overflow(n, w: int, signed: bool, ovf: int):
             if signed:
                 n = (n ^ half) - half  # sign-extend bit w-1
     elif n > upper or n < lower:  # ERROR
-        raise OverflowError("Overflow!")
+        raise OverflowError(_OVERFLOW_ERROR)
     return n
 
 
@@ -507,7 +588,7 @@ def _quantize_int(x, scale: float, w: int, signed: bool, rnd: int, ovf: int):  #
             _, _, upper, lower = _width_params(signed, w)
             return (upper if v > 0 else lower), True
         else:  # ERROR
-            raise OverflowError("Overflow!")
+            raise OverflowError(_OVERFLOW_ERROR)
 
     # Rounding, in floating point. floor(v) and v - floor(v) are both exact, which
     # v +/- 0.5 is not once |v| >= 2**52.
@@ -627,6 +708,31 @@ def _from_int_scalar(n, qi: int, qf: int, signed: bool, ovf: int):
     return _apply_overflow(np.int64(n), qi + qf, signed, ovf) / _scale(qf)
 
 
+def _overflow_error(x, qi: int, qf: int, signed: bool, rnd: int) -> OverflowError:
+    """Detailed OverflowError for `fxpt` / `to_int` with ovf=ERROR, built after a kernel raised.
+
+    Finds the first input that overflows by quantizing again into a 64-bit signed
+    format with the same `qf` and SAT, where every value below 2**63 fits.
+    """
+    spec = FxpSpec(qi, qf, signed, rnd, ERROR)
+    lo, hi = spec.min_int, spec.max_int
+    arr = np.asarray(x, dtype=np.float64)
+    flat = np.where(np.isnan(arr), 0.0, arr).reshape(-1)  # NaN never overflows
+    wide = _to_int_array(flat, MAX_WIDTH_SIGNED - qf, qf, True, rnd, SAT)
+    limit = math.ldexp(1.0, 63 - qf)  # outside the int64 range: overflows every format, even 64-bit
+    huge = (flat >= limit) | (flat < -limit)
+    bad = np.flatnonzero((wide < lo) | (wide > hi) | huge)
+    rng = f"the range of {spec!r} is [{spec.min!r}, {spec.max!r}]"
+    if bad.size == 0:  # pragma: no cover (the kernel raised, so some value overflows)
+        return OverflowError(f"value out of range: {rng}")
+    first = float(flat[bad[0]])
+    if arr.ndim == 0:
+        return OverflowError(f"{first!r} is out of range: {rng}")
+    index = ", ".join(str(int(i)) for i in np.unravel_index(bad[0], arr.shape))
+    count = f" ({bad.size} values out of range)" if bad.size > 1 else ""
+    return OverflowError(f"x[{index}] = {first!r} is out of range{count}: {rng}")
+
+
 def fxpt(  # noqa: PLR0913
     x: Scalar | ArrayLike, qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP
 ) -> Any:  # float for scalars, ndarray for arrays (see Returns)
@@ -672,16 +778,23 @@ def fxpt(  # noqa: PLR0913
         The quantized value(s), as float(s) on the `2**-qf` grid: a float for
         scalar inputs, a float64 array for array, list and tuple inputs.
 
+    Raises
+    ------
+    OverflowError
+        With `ovf=ERROR`, if a value is outside the format's range.
+    ValueError
+        If the width or a mode code is invalid.
+
     Notes
     -----
-    Uses ARM-style Q-format notation where a Qm.n format has:
-        - m integer bits (qi) (including sign bit if signed=True)
-        - n fractional bits (qf)
+    Uses ARM-style Q-format notation: a Qm.n format has m = `qi` integer bits
+    (including the sign bit if `signed=True`) and n = `qf` fractional bits.
 
     Non-finite inputs:
-        - NaN is returned unchanged, for every rounding and overflow mode.
-        - ±inf saturates to the max/min value with SAT, raises with ERROR,
-          and returns NaN with WRAP (an infinite value has no defined wrap).
+
+    - NaN is returned unchanged, for every rounding and overflow mode.
+    - ±inf saturates to the max/min value with SAT, raises with ERROR,
+      and returns NaN with WRAP (an infinite value has no defined wrap).
 
     Examples
     --------
@@ -694,18 +807,20 @@ def fxpt(  # noqa: PLR0913
     3.125
     """
     rnd, ovf = _validated_modes(rnd, ovf)
+    try:  # free when nothing is raised; a function call here would cost ~50 ns
+        if isinstance(x, np.ndarray):
+            return _fxpt_array(x, qi, qf, signed, rnd, ovf)
 
-    if isinstance(x, np.ndarray):
-        return _fxpt_array(x, qi, qf, signed, rnd, ovf)
+        if isinstance(x, float | int | np.integer | np.floating):
+            # float() gives one compiled specialization for every scalar type (and handles
+            # float16, which Numba can't type); the scaling step converts to float anyway.
+            # float(): with NUMBA_DISABLE_JIT=1 the kernel returns np.float64
+            return float(_fxpt_scalar(float(x), qi, qf, signed, rnd, ovf))
 
-    if isinstance(x, float | int | np.integer | np.floating):
-        # float() gives one compiled specialization for every scalar type (and handles
-        # float16, which Numba can't type); the scaling step converts to float anyway.
-        # float(): with NUMBA_DISABLE_JIT=1 the kernel returns np.float64
-        return float(_fxpt_scalar(float(x), qi, qf, signed, rnd, ovf))
-
-    if isinstance(x, list | tuple):
-        return _fxpt_array(np.asarray(x, dtype=np.float64), qi, qf, signed, rnd, ovf)
+        if isinstance(x, list | tuple):
+            return _fxpt_array(np.asarray(x, dtype=np.float64), qi, qf, signed, rnd, ovf)
+    except OverflowError:
+        raise _overflow_error(x, qi, qf, signed, rnd) from None
 
     raise TypeError(f"Unsupported type: {x}")
 

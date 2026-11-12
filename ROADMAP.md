@@ -12,7 +12,7 @@ Tracked improvements for pyfxp. Tick an item and link its PR when it lands.
 - [x] NaN propagates; ±inf saturates with SAT, raises with ERROR, gives NaN with WRAP (#27, #28).
 - [x] 64-bit signed formats: huge inputs saturated to `2**63 − 1024` and passed ERROR silently (found while adding raw integers, #49).
 - [x] Accept NumPy scalars (`np.integer`, `np.floating`) and array-likes (lists, tuples) as input (#19).
-- [ ] Make overflow `ERROR` messages useful: include the value, the format and the valid range (today: `OverflowError: Overflow!`).
+- [x] Make overflow `ERROR` messages useful: the value, its index, the format and the valid range (`5.0 is out of range: the range of sQ3.4(TRUNC, ERROR) is [-4.0, 3.9375]`). Compiled code keeps a constant message.
 
 ## Performance
 
@@ -66,6 +66,6 @@ What still separates the package from a stable 1.0 (checked against `main`):
 - [x] Package metadata: `Intended Audience`, `Topic` and `Typing :: Typed` classifiers, and `keywords` (#53).
 - [ ] Set `Development Status :: 5 - Production/Stable` when releasing 1.0.
 - [ ] Python 3.14: add it to the CI matrix and classifiers once the minimum supported Numba version supports it.
-- [ ] Docs URLs: `pyproject.toml` points to `/en/stable/`, the README to `/en/latest/`. Pick one, and check the first Read the Docs build with the new Sphinx config (#50).
+- [x] Docs URLs: everything (README, `pyproject.toml`, llms.txt) points to `/en/stable/`, the docs of the latest release. The Read the Docs `latest` build of the new Sphinx config works (Furo, `dirhtml` URLs, `llms.txt`); `stable` switches to it with the 1.0 tag.
 - [ ] Release dry run: build the sdist and wheel, and check the README on PyPI's renderer (GitHub alerts like `> [!NOTE]` show as plain quotes there).
 - [ ] Close or defer the remaining open items above, so 1.0 doesn't ship with a known-wrong error message.

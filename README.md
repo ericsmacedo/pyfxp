@@ -1,7 +1,7 @@
 
 [![PyPI Version](https://badge.fury.io/py/pyfxp.svg)](https://badge.fury.io/py/pyfxp)
 [![Python Build](https://github.com/ericsmacedo/pyfxp/actions/workflows/main.yml/badge.svg)](https://github.com/ericsmacedo/pyfxp/actions/workflows/main.yml)
-[![Documentation](https://readthedocs.org/projects/pyfxp/badge/?version=latest)](https://pyfxp.readthedocs.io/en/latest/)
+[![Documentation](https://readthedocs.org/projects/pyfxp/badge/?version=stable)](https://pyfxp.readthedocs.io/en/stable/)
 [![Coverage Status](https://coveralls.io/repos/github/ericsmacedo/pyfxp/badge.svg?branch=main)](https://coveralls.io/github/ericsmacedo/pyfxp?branch=main)
 [![python-versions](https://img.shields.io/pypi/pyversions/pyfxp.svg)](https://pypi.python.org/pypi/pyfxp)
 [![semantic-versioning](https://img.shields.io/badge/semver-2.0.0-green)](https://semver.org/)
@@ -11,12 +11,12 @@
 
 # pyfxp package
 
-* [Documentation](https://pyfxp.readthedocs.io/en/latest/)
+* [Documentation](https://pyfxp.readthedocs.io/en/stable/)
 * [PyPI](https://pypi.org/project/pyfxp/)
 * [Sources](https://github.com/ericsmacedo/pyfxp)
 * [Issues](https://github.com/ericsmacedo/pyfxp/issues)
-* [Public API and versioning](https://pyfxp.readthedocs.io/en/latest/api/stability/): what SemVer covers
-* [llms.txt](https://pyfxp.readthedocs.io/en/latest/llms.txt) / [llms-full.txt](https://pyfxp.readthedocs.io/en/latest/llms-full.txt): the documentation as plain text for AI assistants
+* [Public API and versioning](https://pyfxp.readthedocs.io/en/stable/api/stability/): what SemVer covers
+* [llms.txt](https://pyfxp.readthedocs.io/en/stable/llms.txt) / [llms-full.txt](https://pyfxp.readthedocs.io/en/stable/llms-full.txt): the documentation as plain text for AI assistants
 
 pyfxp brings fixed-point precision to Python — simple, fast, and explicit.
 
@@ -44,10 +44,10 @@ pip install pyfxp
 
 `pyfxp` offers two ways to convert numbers to a fixed-point format:
 
-- **[fxpt](https://pyfxp.readthedocs.io/en/latest/api/fxpt/)** → “typed” (parameter-based)
+- **[fxpt](https://pyfxp.readthedocs.io/en/stable/api/fxpt/)** → “typed” (parameter-based)
     Pass the format directly as function parameters.
-- **[fxp](https://pyfxp.readthedocs.io/en/latest/api/fxp/)** → “spec-based” (explicit FxpSpec)
-    Build a reusable spec with [`Q(...)`](https://pyfxp.readthedocs.io/en/latest/api/Q/), then pass that spec.
+- **[fxp](https://pyfxp.readthedocs.io/en/stable/api/fxp/)** → “spec-based” (explicit FxpSpec)
+    Build a reusable spec with [`Q(...)`](https://pyfxp.readthedocs.io/en/stable/api/Q/), then pass that spec.
 
 
 Use the `fxpt` function when the format is simple or used in a single place:
@@ -73,7 +73,7 @@ y = fxpt(
 > Refer to [Q (number format)](https://en.wikipedia.org/wiki/Q_(number_format)) for more information.
 
 Use `fxp` when you want a reusable, readable definition. The fixed-point format is defined
-using the [`Q(...)`](https://pyfxp.readthedocs.io/en/latest/api/Q/) function once, and can be
+using the [`Q(...)`](https://pyfxp.readthedocs.io/en/stable/api/Q/) function once, and can be
 reused for different `fxp` calls:
 
 ```python
@@ -89,7 +89,7 @@ y1 = fxp(3.14159, Q3_13)
 y2 = fxp(np.array([0.1, 0.2, 0.3]), Q3_13)
 ```
 
-[`Q(...)`](https://pyfxp.readthedocs.io/en/latest/api/Q/) returns an [FxpSpec](https://pyfxp.readthedocs.io/en/latest/api/FxpSpec/) instance
+[`Q(...)`](https://pyfxp.readthedocs.io/en/stable/api/Q/) returns an [FxpSpec](https://pyfxp.readthedocs.io/en/stable/api/FxpSpec/) instance
 which is basically a named tuple containing the specs used by `fxp`.
 
 When specifying the fixed-point specs using either `fxpt` or `Q`,
@@ -117,7 +117,7 @@ all the following rounding and overflow modes are supported:
 | `SAT` | Saturate at the maximum/minimum representable value |
 | `ERROR` | Raise an exception on overflow |
 
-The constants above are defined in the [`pyfxp.constants`](https://pyfxp.readthedocs.io/en/latest/api/constants/) module.
+The constants above are defined in the [`pyfxp.constants`](https://pyfxp.readthedocs.io/en/stable/api/constants/) module.
 They are used by both `fxpt` and `fxp` to specify fixed-point arithmetic behavior.
 
 > [!TIP]
