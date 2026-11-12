@@ -15,6 +15,7 @@
 * [PyPI](https://pypi.org/project/pyfxp/)
 * [Sources](https://github.com/ericsmacedo/pyfxp)
 * [Issues](https://github.com/ericsmacedo/pyfxp/issues)
+* [Public API and versioning](https://pyfxp.readthedocs.io/en/stable/api/stability/): what SemVer covers
 * [llms.txt](https://pyfxp.readthedocs.io/en/stable/llms.txt) / [llms-full.txt](https://pyfxp.readthedocs.io/en/stable/llms-full.txt): the documentation as plain text for AI assistants
 
 pyfxp brings fixed-point precision to Python — simple, fast, and explicit.

@@ -61,7 +61,7 @@ Baseline numbers come from `uv run inv bench`; the comparison with other librari
 What still separates the package from a stable 1.0 (checked against `main`):
 
 - [x] Write a `CHANGELOG.md` (Keep a Changelog format; also in the docs).
-- [ ] Define the public API: everything in `pyfxp.__all__` and `pyfxp.constants`; `pyfxp._pyfxp` / `pyfxp._raw` are private. State the SemVer promise (the README has a SemVer badge) in the docs.
+- [x] Define the public API: everything in `pyfxp.__all__` and `pyfxp.constants`; `pyfxp._pyfxp` / `pyfxp._raw` are private. State the SemVer promise (the README has a SemVer badge) in the docs. See `docs/api/stability.md`.
 - [x] Ship a `py.typed` marker, so type checkers use the annotations (#53).
 - [x] Package metadata: `Intended Audience`, `Topic` and `Typing :: Typed` classifiers, and `keywords` (#53).
 - [x] Set `Development Status :: 5 - Production/Stable`.
