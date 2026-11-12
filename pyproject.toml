@@ -50,6 +50,7 @@ keywords = [
 [project.urls]
 "Homepage" = "https://github.com/ericsmacedo/pyfxp"
 "Documentation" = "https://pyfxp.readthedocs.io/en/stable/"
+"Changelog" = "https://github.com/ericsmacedo/pyfxp/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/ericsmacedo/pyfxp/issues"
 
 [dependency-groups]
