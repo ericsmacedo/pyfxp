@@ -66,6 +66,6 @@ What still separates the package from a stable 1.0 (checked against `main`):
 - [x] Package metadata: `Intended Audience`, `Topic` and `Typing :: Typed` classifiers, and `keywords` (#53).
 - [ ] Set `Development Status :: 5 - Production/Stable` when releasing 1.0.
 - [ ] Python 3.14: add it to the CI matrix and classifiers once the minimum supported Numba version supports it.
-- [ ] Docs URLs: `pyproject.toml` points to `/en/stable/`, the README to `/en/latest/`. Pick one, and check the first Read the Docs build with the new Sphinx config (#50).
+- [x] Docs URLs: everything (README, `pyproject.toml`, llms.txt) points to `/en/stable/`, the docs of the latest release. The Read the Docs `latest` build of the new Sphinx config works (Furo, `dirhtml` URLs, `llms.txt`); `stable` switches to it with the 1.0 tag.
 - [ ] Release dry run: build the sdist and wheel, and check the README on PyPI's renderer (GitHub alerts like `> [!NOTE]` show as plain quotes there).
 - [ ] Close or defer the remaining open items above, so 1.0 doesn't ship with a known-wrong error message.
