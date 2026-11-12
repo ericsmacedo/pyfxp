@@ -32,6 +32,7 @@ from ._pyfxp import (
     FxpSpec,
     Scalar,
     _check_width,
+    _overflow_error,
     _from_int_array,
     _from_int_scalar,
     _to_int_array,
@@ -50,8 +51,16 @@ def _from_int_py(n: int, spec: FxpSpec, ovf: int) -> float:
         elif ovf == SAT:
             n = min(max(n, lo), hi)
         else:
-            raise OverflowError("Overflow!")
+            raise _int_overflow_error(n, None, spec)
     return math.ldexp(n, -spec.qf)
+
+
+def _int_overflow_error(n: int, index: tuple | None, spec: FxpSpec) -> OverflowError:
+    """Detailed OverflowError for `from_int` with ovf=ERROR."""
+    where = f"{n}" if index is None else f"n[{', '.join(str(int(i)) for i in index)}] = {n}"
+    return OverflowError(
+        f"{where} is out of range: the stored integers of {spec!r} are [{spec.min_int}, {spec.max_int}]"
+    )
 
 
 # ----------------------------------------------------------------------------- public API
@@ -95,12 +104,15 @@ def to_int(x: Scalar | ArrayLike, spec: FxpSpec):
     array([ 8, -8])
     """
     rnd, ovf = _validated_modes(spec.rnd, spec.ovf)
-    if isinstance(x, np.ndarray):
-        return _to_int_array(x, spec.qi, spec.qf, spec.signed, rnd, ovf)
-    if isinstance(x, float | int | np.integer | np.floating):
-        return int(_to_int_scalar(float(x), spec.qi, spec.qf, spec.signed, rnd, ovf))
-    if isinstance(x, list | tuple):
-        return _to_int_array(np.asarray(x, dtype=np.float64), spec.qi, spec.qf, spec.signed, rnd, ovf)
+    try:
+        if isinstance(x, np.ndarray):
+            return _to_int_array(x, spec.qi, spec.qf, spec.signed, rnd, ovf)
+        if isinstance(x, float | int | np.integer | np.floating):
+            return int(_to_int_scalar(float(x), spec.qi, spec.qf, spec.signed, rnd, ovf))
+        if isinstance(x, list | tuple):
+            return _to_int_array(np.asarray(x, dtype=np.float64), spec.qi, spec.qf, spec.signed, rnd, ovf)
+    except OverflowError:
+        raise _overflow_error(x, spec.qi, spec.qf, spec.signed, rnd) from None
     raise TypeError(f"Unsupported type: {x}")
 
 
@@ -140,7 +152,13 @@ def from_int(n, spec: FxpSpec):
             raise TypeError(f"from_int expects integers, got an array of {arr.dtype}")
         if arr.dtype == np.uint64 and arr.size and arr.max() > np.iinfo(np.int64).max:
             raise ValueError("from_int: array values above 2**63 - 1 are not supported")
-        return _from_int_array(arr, spec.qi, spec.qf, spec.signed, ovf)
+        try:
+            return _from_int_array(arr, spec.qi, spec.qf, spec.signed, ovf)
+        except OverflowError:
+            a = arr.astype(np.int64)
+            first = int(np.flatnonzero((a < spec.min_int) | (a > spec.max_int))[0])
+            index = np.unravel_index(first, a.shape)
+            raise _int_overflow_error(int(a.reshape(-1)[first]), index, spec) from None
     raise TypeError(f"from_int expects integers, got {type(n).__name__}")
 
 

@@ -12,7 +12,7 @@ Tracked improvements for pyfxp. Tick an item and link its PR when it lands.
 - [x] NaN propagates; ±inf saturates with SAT, raises with ERROR, gives NaN with WRAP (#27, #28).
 - [x] 64-bit signed formats: huge inputs saturated to `2**63 − 1024` and passed ERROR silently (found while adding raw integers, #49).
 - [x] Accept NumPy scalars (`np.integer`, `np.floating`) and array-likes (lists, tuples) as input (#19).
-- [ ] Make overflow `ERROR` messages useful: include the value, the format and the valid range (today: `OverflowError: Overflow!`).
+- [x] Make overflow `ERROR` messages useful: the value, its index, the format and the valid range (`5.0 is out of range: the range of sQ3.4(TRUNC, ERROR) is [-4.0, 3.9375]`). Compiled code keeps a constant message.
 
 ## Performance
 
