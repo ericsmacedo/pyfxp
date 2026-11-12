@@ -64,7 +64,7 @@ What still separates the package from a stable 1.0 (checked against `main`):
 - [ ] Define the public API: everything in `pyfxp.__all__` and `pyfxp.constants`; `pyfxp._pyfxp` / `pyfxp._raw` are private. State the SemVer promise (the README has a SemVer badge) in the docs.
 - [x] Ship a `py.typed` marker, so type checkers use the annotations (#53).
 - [x] Package metadata: `Intended Audience`, `Topic` and `Typing :: Typed` classifiers, and `keywords` (#53).
-- [ ] Set `Development Status :: 5 - Production/Stable` when releasing 1.0.
+- [x] Set `Development Status :: 5 - Production/Stable`.
 - [ ] Python 3.14: add it to the CI matrix and classifiers once the minimum supported Numba version supports it.
 - [ ] Docs URLs: `pyproject.toml` points to `/en/stable/`, the README to `/en/latest/`. Pick one, and check the first Read the Docs build with the new Sphinx config (#50).
 - [ ] Release dry run: build the sdist and wheel, and check the README on PyPI's renderer (GitHub alerts like `> [!NOTE]` show as plain quotes there).
