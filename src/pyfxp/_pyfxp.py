@@ -392,6 +392,11 @@ _INT64_MIN = np.int64(-(2**63))
 
 _WIDTH_ERROR = "invalid format width (qi + qf): must be between 1 and 64 (signed) or 63 (unsigned)"
 
+# Compiled code raises this constant message (formatting in a kernel costs time on every
+# call). The Python-level functions catch it and raise `_overflow_error` instead, which
+# names the value, the format and its range.
+_OVERFLOW_ERROR = "value out of range of the fixed-point format (ovf=ERROR)"
+
 
 def _check_width(signed: bool, w: int) -> None:
     """Python-level version of the width check in `_width_params`."""
@@ -479,7 +484,7 @@ def _apply_overflow(n, w: int, signed: bool, ovf: int):
             if signed:
                 n = (n ^ half) - half  # sign-extend bit w-1
     elif n > upper or n < lower:  # ERROR
-        raise OverflowError("Overflow!")
+        raise OverflowError(_OVERFLOW_ERROR)
     return n
 
 
@@ -507,7 +512,7 @@ def _quantize_int(x, scale: float, w: int, signed: bool, rnd: int, ovf: int):  #
             _, _, upper, lower = _width_params(signed, w)
             return (upper if v > 0 else lower), True
         else:  # ERROR
-            raise OverflowError("Overflow!")
+            raise OverflowError(_OVERFLOW_ERROR)
 
     # Rounding, in floating point. floor(v) and v - floor(v) are both exact, which
     # v +/- 0.5 is not once |v| >= 2**52.
@@ -627,6 +632,31 @@ def _from_int_scalar(n, qi: int, qf: int, signed: bool, ovf: int):
     return _apply_overflow(np.int64(n), qi + qf, signed, ovf) / _scale(qf)
 
 
+def _overflow_error(x, qi: int, qf: int, signed: bool, rnd: int) -> OverflowError:
+    """Detailed OverflowError for `fxpt` / `to_int` with ovf=ERROR, built after a kernel raised.
+
+    Finds the first input that overflows by quantizing again into a 64-bit signed
+    format with the same `qf` and SAT, where every value below 2**63 fits.
+    """
+    spec = FxpSpec(qi, qf, signed, rnd, ERROR)
+    lo, hi = spec.min_int, spec.max_int
+    arr = np.asarray(x, dtype=np.float64)
+    flat = np.where(np.isnan(arr), 0.0, arr).reshape(-1)  # NaN never overflows
+    wide = _to_int_array(flat, MAX_WIDTH_SIGNED - qf, qf, True, rnd, SAT)
+    limit = math.ldexp(1.0, 63 - qf)  # outside the int64 range: overflows every format, even 64-bit
+    huge = (flat >= limit) | (flat < -limit)
+    bad = np.flatnonzero((wide < lo) | (wide > hi) | huge)
+    rng = f"the range of {spec!r} is [{spec.min!r}, {spec.max!r}]"
+    if bad.size == 0:  # pragma: no cover (the kernel raised, so some value overflows)
+        return OverflowError(f"value out of range: {rng}")
+    first = float(flat[bad[0]])
+    if arr.ndim == 0:
+        return OverflowError(f"{first!r} is out of range: {rng}")
+    index = ", ".join(str(int(i)) for i in np.unravel_index(bad[0], arr.shape))
+    count = f" ({bad.size} values out of range)" if bad.size > 1 else ""
+    return OverflowError(f"x[{index}] = {first!r} is out of range{count}: {rng}")
+
+
 def fxpt(  # noqa: PLR0913
     x: Scalar | ArrayLike, qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP
 ) -> Any:  # float for scalars, ndarray for arrays (see Returns)
@@ -694,18 +724,20 @@ def fxpt(  # noqa: PLR0913
     3.125
     """
     rnd, ovf = _validated_modes(rnd, ovf)
+    try:  # free when nothing is raised; a function call here would cost ~50 ns
+        if isinstance(x, np.ndarray):
+            return _fxpt_array(x, qi, qf, signed, rnd, ovf)
 
-    if isinstance(x, np.ndarray):
-        return _fxpt_array(x, qi, qf, signed, rnd, ovf)
+        if isinstance(x, float | int | np.integer | np.floating):
+            # float() gives one compiled specialization for every scalar type (and handles
+            # float16, which Numba can't type); the scaling step converts to float anyway.
+            # float(): with NUMBA_DISABLE_JIT=1 the kernel returns np.float64
+            return float(_fxpt_scalar(float(x), qi, qf, signed, rnd, ovf))
 
-    if isinstance(x, float | int | np.integer | np.floating):
-        # float() gives one compiled specialization for every scalar type (and handles
-        # float16, which Numba can't type); the scaling step converts to float anyway.
-        # float(): with NUMBA_DISABLE_JIT=1 the kernel returns np.float64
-        return float(_fxpt_scalar(float(x), qi, qf, signed, rnd, ovf))
-
-    if isinstance(x, list | tuple):
-        return _fxpt_array(np.asarray(x, dtype=np.float64), qi, qf, signed, rnd, ovf)
+        if isinstance(x, list | tuple):
+            return _fxpt_array(np.asarray(x, dtype=np.float64), qi, qf, signed, rnd, ovf)
+    except OverflowError:
+        raise _overflow_error(x, qi, qf, signed, rnd) from None
 
     raise TypeError(f"Unsupported type: {x}")
 
