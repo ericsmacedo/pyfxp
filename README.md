@@ -69,8 +69,8 @@ to_hex(y, y_spec)                           # expected values for your RTL testb
   Every mode is property-tested against an exact rational-arithmetic reference.
 - **Fast where it counts.** About 5 ns per sample inside `@njit` loops, and as fast as the fastest
   library on NumPy arrays. The only Python fixed-point library that works inside Numba.
-- **Plain floats and NumPy.** No custom number type: results are floats and float64 arrays, so
-  SciPy, Matplotlib and the model you already have keep working. Floats are exact up to 53
+- **Plain floats and NumPy.** No custom number type: results are floats and float64 arrays
+  (complex128 for I/Q signals), so SciPy, Matplotlib and the model you already have keep working. Floats are exact up to 53
   significant bits of the stored integer; wider formats need `to_int` / `to_hex` for bit-exact results.
 - **Hardware-ready.** `to_int`, `to_hex` and `to_bin` give the stored integers and two's-complement
   patterns for `$readmemh` test vectors, exact at every width.

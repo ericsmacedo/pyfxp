@@ -39,3 +39,12 @@ True
 For bit-exact work above 53 bits (test vectors, comparison with RTL), use the stored integers
 and bit patterns from [`to_int`, `to_bin` and `to_hex`](raw.md), and compare in that domain
 rather than on floats.
+
+## Complex values
+
+`fxp` of a complex value quantizes the real and imaginary parts separately, each a float64, so
+the rules above apply to each part. Products computed before quantizing are a separate limit:
+for `fxp(a * b, spec)`, NumPy computes the real part `a.real * b.real - a.imag * b.imag` in
+float64, which is exact only while each product and their difference fit in 53 bits, i.e.
+roughly `a_spec.width + b_spec.width + 1 <= 53`. The format of that exact real part is
+`a_spec.mul(b_spec).sub(a_spec.mul(b_spec))`.

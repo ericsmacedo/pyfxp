@@ -6,6 +6,14 @@ and from 1.0 on the project follows [Semantic Versioning](https://semver.org/): 
 
 ## [Unreleased]
 
+### Added
+
+- **Complex inputs to `fxp` and `fxpt`.** Python and NumPy complex scalars, complex arrays of any shape and
+  lists or tuples with complex values quantize the real and imaginary parts separately, with the same
+  format, and return a `complex` or a complex128 array, also inside `@njit` code. NaN, ±inf and the
+  overflow modes apply to each part, and `ERROR` messages name the part that overflows. `to_int`, `to_bin`
+  and `to_hex` raise `TypeError` for complex inputs; convert `z.real` and `z.imag` separately.
+
 ### Fixed
 
 - **Integer inputs are quantized exactly.** `fxp`, `fxpt`, `to_int`, `to_bin` and `to_hex` used to convert

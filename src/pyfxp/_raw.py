@@ -72,6 +72,12 @@ def _int_overflow_error(n: int, index: tuple | None, spec: FxpSpec) -> OverflowE
 # ----------------------------------------------------------------------------- public API
 
 
+_COMPLEX_ERROR = (
+    "complex inputs are not supported by to_int / to_bin / to_hex: convert the real and imaginary parts "
+    "separately, e.g. to_int(z.real, spec) and to_int(z.imag, spec)"
+)
+
+
 def to_int(x: Scalar | ArrayLike, spec: FxpSpec):
     """Quantize like `fxp` and return the stored integer instead of the real value.
 
@@ -100,6 +106,8 @@ def to_int(x: Scalar | ArrayLike, spec: FxpSpec):
     ------
     ValueError
         For NaN input (and +-inf with WRAP), which has no integer representation.
+    TypeError
+        For complex input: convert `z.real` and `z.imag` separately.
 
     Examples
     --------
@@ -119,6 +127,8 @@ def to_int(x: Scalar | ArrayLike, spec: FxpSpec):
         if isinstance(x, np.ndarray):
             if _is_int_array(x):
                 return _int_to_int(x, spec.qi, spec.qf, spec.signed, rnd, ovf)
+            if x.dtype.kind == "c":
+                raise TypeError(_COMPLEX_ERROR)
             return _to_int_array(x, spec.qi, spec.qf, spec.signed, rnd, ovf)
         if isinstance(x, float | np.floating):
             return int(_to_int_scalar(float(x), spec.qi, spec.qf, spec.signed, rnd, ovf))
@@ -128,9 +138,13 @@ def to_int(x: Scalar | ArrayLike, spec: FxpSpec):
             arr = _as_array(x)
             if arr.dtype == np.float64:
                 return _to_int_array(arr, spec.qi, spec.qf, spec.signed, rnd, ovf)
+            if arr.dtype.kind == "c":
+                raise TypeError(_COMPLEX_ERROR)
             return _int_to_int(arr, spec.qi, spec.qf, spec.signed, rnd, ovf)
     except OverflowError:
         raise _overflow_error(x, spec.qi, spec.qf, spec.signed, rnd) from None
+    if isinstance(x, complex | np.complexfloating):
+        raise TypeError(_COMPLEX_ERROR)
     raise TypeError(f"Unsupported type: {x}")
 
 
@@ -330,6 +344,10 @@ def from_hex(s, spec: FxpSpec):
 @overload(to_int, inline="always")
 def _to_int_overload(x, spec):
     """Make `to_int` callable from user @njit code."""
+    if isinstance(x, types.Complex) or (
+        isinstance(x, types.Array | types.List | types.UniTuple) and isinstance(x.dtype, types.Complex)
+    ):
+        raise TypeError(_COMPLEX_ERROR)
     if isinstance(x, types.Array) and _is_exact_int_type(x.dtype):
 
         def impl(x, spec):
