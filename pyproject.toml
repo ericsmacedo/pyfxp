@@ -129,7 +129,7 @@ addopts ="""
 filterwarnings = [
     "error",
 ]
-testpaths = ["tests", "src", "docs/api/precision.md"]  # src: docstring examples; docs page with doctests
+testpaths = ["tests", "src", "docs/api/precision.md", "docs/examples/integer_flow.md"]  # src: docstring examples; docs pages with doctests
 
 [tool.coverage.run]
 source = ["src/pyfxp"]
