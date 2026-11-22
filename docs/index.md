@@ -91,7 +91,8 @@ NumPy arrays. The only Python fixed-point library that works inside Numba.
 
 :::{grid-item-card} Plain floats and NumPy
 No custom number type: results are floats and float64 arrays, so SciPy, Matplotlib
-and the model you already have keep working.
+and the model you already have keep working. Floats are exact up to 53 significant bits
+of the stored integer ([details](api/precision.md)).
 :::
 
 :::{grid-item-card} Hardware-ready

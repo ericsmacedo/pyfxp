@@ -1,6 +1,7 @@
 # API Overview
 
 What is public, and what SemVer promises about it: [Public API and versioning](stability.md).
+When float results are exact (formats wider than 53 bits): [Precision of float results](precision.md).
 
 `pyfxp` offers two ways to convert numbers to fixed-point:
 
@@ -129,5 +130,6 @@ Q
 FxpSpec
 raw
 constants
+precision
 stability
 ```

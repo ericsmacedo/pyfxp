@@ -129,7 +129,7 @@ addopts ="""
 filterwarnings = [
     "error",
 ]
-testpaths = ["tests", "src"]  # Directories to search for tests (src: docstring examples)
+testpaths = ["tests", "src", "docs/api/precision.md"]  # src: docstring examples; docs page with doctests
 
 [tool.coverage.run]
 source = ["src/pyfxp"]
