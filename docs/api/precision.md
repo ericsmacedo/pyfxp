@@ -38,5 +38,4 @@ True
 
 For bit-exact work above 53 bits (test vectors, comparison with RTL), use the stored integers
 and bit patterns from [`to_int`, `to_bin` and `to_hex`](raw.md), and compare in that domain
-rather than on floats. [Bit-exact integer datapath](../examples/integer_flow.md) shows a complete
-flow on stored integers: multiply, accumulate, requantize and write test vectors.
+rather than on floats.

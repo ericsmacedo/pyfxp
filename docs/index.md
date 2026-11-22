@@ -139,7 +139,6 @@ supports.
 
 getting-started
 examples/example_int
-examples/integer_flow
 comparison
 ```
 
