@@ -62,11 +62,11 @@ SPEC = Q(QI, QF, True, TRUNC, SAT)
 
 def _adapters() -> dict[str, dict]:
     """Array and scalar functions per library, all computing floor + saturate to sQ8.12."""
-    import apytypes as apy  # ty: ignore[unresolved-import]  # noqa: PLC0415
-    from fixedpoint import FixedPoint  # ty: ignore[unresolved-import]  # noqa: PLC0415
-    from FixedPoint import FXfamily, FXnum  # ty: ignore[unresolved-import]  # noqa: PLC0415
-    from fxpmath import Fxp  # ty: ignore[unresolved-import]  # noqa: PLC0415
-    from numfi import numfi  # ty: ignore[unresolved-import]  # noqa: PLC0415
+    import apytypes as apy  # ty: ignore[import-not-found]  # noqa: PLC0415
+    from fixedpoint import FixedPoint  # ty: ignore[import-not-found]  # noqa: PLC0415
+    from FixedPoint import FXfamily, FXnum  # ty: ignore[import-not-found]  # noqa: PLC0415
+    from fxpmath import Fxp  # ty: ignore[import-not-found]  # noqa: PLC0415
+    from numfi import numfi  # ty: ignore[import-not-found]  # noqa: PLC0415
 
     fam = FXfamily(n_bits=QF, n_intbits=QI)
 

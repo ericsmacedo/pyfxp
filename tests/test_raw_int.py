@@ -240,7 +240,7 @@ def test_invalid_spec_raises():
     with pytest.raises(ValueError, match="invalid method"):
         to_int(1.0, FxpSpec(8, 4, True, 20, 0))
     with pytest.raises(TypeError, match="Unsupported type"):
-        to_int("1.0", Q(8, 4))
+        to_int("1.0", Q(8, 4))  # ty: ignore[invalid-argument-type]
 
 
 @njit
