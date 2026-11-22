@@ -71,7 +71,11 @@ def test_properties_inside_njit(spec):
 
 @pytest.mark.parametrize(
     "spec",
-    [FxpSpec(4, 3, True, 0, 1), FxpSpec(4, 3, 1, 0, 1), FxpSpec(8, 0, False, 6, 2)],  # type: ignore[invalid-argument-type]
+    [
+        FxpSpec(4, 3, True, 0, 1),
+        FxpSpec(4, 3, 1, 0, 1),  # ty: ignore[invalid-argument-type]
+        FxpSpec(8, 0, False, 6, 2),
+    ],
 )
 def test_properties_on_plain_fxpspec(spec):
     """Specs built directly (ints, or all-int fields) work too, in Python and in @njit."""
@@ -151,7 +155,13 @@ _GETTERS = [
 
 
 @pytest.mark.skipif(os.environ.get("NUMBA_DISABLE_JIT") == "1", reason="checks Numba typing")
-@pytest.mark.parametrize("other", [_Other(4, 3, True, 0, 1), _Other(4, 3, 1, 0, 1)])  # type: ignore[invalid-argument-type]
+@pytest.mark.parametrize(
+    "other",
+    [
+        _Other(4, 3, True, 0, 1),
+        _Other(4, 3, 1, 0, 1),  # ty: ignore[invalid-argument-type]
+    ],
+)
 @pytest.mark.parametrize("getter", _GETTERS)
 def test_properties_only_on_fxpspec(other, getter):
     """The @njit attributes are registered for FxpSpec only, not for other named tuples."""

@@ -403,7 +403,7 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int | np.integer = TRUNC, ovf:
 
 
 def fxp(
-    x: Scalar | ComplexScalar | ArrayLike, spec: FxpSpec
+    x: Scalar | ComplexScalar | ArrayLike | Sequence[complex], spec: FxpSpec
 ) -> Any:  # float for scalars, ndarray for arrays (see Returns)
     """Convert a numeric value to fixed-point representation using a pre-defined fixed-point specification.
 
@@ -750,7 +750,7 @@ def _round_pyint(x: int, qf: int, rnd: int) -> int:
     k = -qf
     q, rem = divmod(x, 1 << k)  # floor division: rem in [0, 2**k)
     half = 1 << (k - 1)
-    inc = {
+    inc_by_mode: dict[int, bool] = {  # rnd arrives as a plain int, not a Rounding member
         TRUNC: False,
         CEIL: rem != 0,
         TO_ZERO: rem != 0 and q < 0,
@@ -760,8 +760,8 @@ def _round_pyint(x: int, qf: int, rnd: int) -> int:
         HALF_EVEN: rem > half or (rem == half and q % 2 == 1),
         HALF_ZERO: rem > half or (rem == half and q < 0),
         HALF_AWAY: rem > half or (rem == half and q >= 0),
-    }[rnd]
-    return q + inc
+    }
+    return q + inc_by_mode[rnd]
 
 
 def _quantize_pyint(x: int, qi: int, qf: int, signed: bool, rnd: int, ovf: int) -> int:  # noqa: PLR0913
@@ -1049,7 +1049,12 @@ def _int_overflow_error(arr: np.ndarray, spec: FxpSpec) -> OverflowError:
 
 
 def fxpt(  # noqa: PLR0913
-    x: Scalar | ComplexScalar | ArrayLike, qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP
+    x: Scalar | ComplexScalar | ArrayLike | Sequence[complex],
+    qi: int,
+    qf: int,
+    signed: bool = True,
+    rnd: int = TRUNC,
+    ovf: int = WRAP,
 ) -> Any:  # float for scalars, ndarray for arrays (see Returns)
     """Convert a numeric value to fixed-point representation using Q-format notation.
 

@@ -132,7 +132,7 @@ _AUTODOC = re.compile(r"```\{eval-rst\}\n\.\. auto(function|class|module):: (\S+
 
 _SIGNATURE_NAMES = {
     "float | int | numpy.integer | numpy.floating | complex | numpy.complexfloating | numpy.ndarray | "
-    "collections.abc.Sequence[float]": "Scalar | ComplexScalar | ArrayLike",
+    "collections.abc.Sequence[float] | collections.abc.Sequence[complex]": "Scalar | ComplexScalar | ArrayLike",
     "float | int | numpy.integer | numpy.floating | numpy.ndarray | collections.abc.Sequence[float]": "Scalar | ArrayLike",
     "int | numpy.integer": "int",
     "pyfxp._pyfxp.FxpSpec": "FxpSpec",
