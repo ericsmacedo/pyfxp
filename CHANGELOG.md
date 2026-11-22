@@ -4,6 +4,19 @@ All notable changes to pyfxp. The format follows [Keep a Changelog](https://keep
 and from 1.0 on the project follows [Semantic Versioning](https://semver.org/): see
 [Public API and versioning](https://pyfxp.readthedocs.io/en/stable/api/stability/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Integer inputs are quantized exactly.** `fxp`, `fxpt`, `to_int`, `to_bin` and `to_hex` used to convert
+  integer inputs to float64 first, which rounded integers with more than 53 significant bits. They are now
+  quantized in integer arithmetic (Python ints of any size, NumPy integer scalars and arrays, integer lists
+  and tuples), as the reference model does. Results change only for integers that float64 can't represent
+  exactly, e.g. `to_int(2**58 + 1, Q(60, 0))` is `2**58 + 1` (was `2**58`), `to_hex(2**63 - 1, Q(64, 0))` is
+  `'7fffffffffffffff'` (was `'8000000000000000'`), and `to_int(2**63 - 1, Q(64, 0, ovf=ERROR))` no longer
+  raises. Inside `@njit` code, uint64 inputs still go through float64. Integer arrays are also faster
+  (`fxp` on an int64 array: about 6x).
+
 ## [1.0.0] - 2026-11-12
 
 First stable release. Code written for 0.2.1 keeps working, except for the points under

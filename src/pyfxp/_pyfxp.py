@@ -438,6 +438,8 @@ def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndar
     -----
     - `fxp(x, Q(qi, qf, signed, rnd, ovf))` is equivalent to
       `fxpt(x, qi, qf, signed, rnd, ovf)`.
+    - Integer inputs are quantized exactly, in integer arithmetic; only the returned
+      float64 is rounded, for stored integers with more than 53 significant bits.
     - Uses ARM-style Q-format notation (Qm.n): m = `qi` integer bits (including the
       sign bit if `signed=True`) and n = `qf` fractional bits.
     - Works inside Numba `@njit` code.
@@ -630,6 +632,214 @@ def _quantize(x, scale: float, w: int, signed: bool, rnd: int, ovf: int):  # noq
     return n / scale
 
 
+# ----------------------------------------------------------------------------- exact integer inputs
+#
+# Integer inputs are quantized in integer arithmetic, so integers with more than 53
+# significant bits are not rounded to float64 first. Only int64 values reach these
+# kernels; wider Python ints and uint64 values >= 2**63 use `_quantize_pyint`.
+# Every shift count stays in [0, 63] and no step overflows int64 except the
+# deliberate wrapping left shift under WRAP (silent both compiled and in NumPy).
+
+
+@njit(cache=True, nogil=True, inline="always")
+def _round_shift_right(x, k: int, rnd: int):  # noqa: C901, PLR0911, PLR0912
+    """Round the exact value x / 2**k (k >= 1) to an integer with mode `rnd`."""
+    if k <= 63:  # noqa: PLR2004
+        q = x >> k  # floor
+        half = np.int64(1) << (k - 1)
+        rem = x & (half - 1 + half)  # x - q * 2**k, in [0, 2**k)
+        nonzero = rem != 0
+        above = rem > half
+        tie = rem == half
+    else:  # |x| < 2**63 <= 2**(k-1): the quotient is in [-1/2, 1/2)
+        q = x >> 63  # 0 or -1
+        if x >= 0:
+            nonzero = x != 0
+            above = False
+            tie = False
+        else:
+            nonzero = True
+            tie = k == 64 and x == _INT64_MIN  # noqa: PLR2004 (exactly -1/2)
+            above = not tie
+    if rnd == TRUNC:
+        return q
+    if rnd == CEIL:
+        return q + nonzero
+    if rnd == TO_ZERO:
+        return q + (nonzero & (q < 0))
+    if rnd == AWAY:
+        return q + (nonzero & (q >= 0))
+    if rnd == HALF_UP:
+        return q + (above | tie)
+    if rnd == HALF_DOWN:
+        return q + above
+    if rnd == HALF_EVEN:
+        return q + (above | (tie & ((q & 1) == 1)))
+    if rnd == HALF_ZERO:
+        return q + (above | (tie & (q < 0)))
+    return q + (above | (tie & (q >= 0)))  # HALF_AWAY
+
+
+@njit(cache=True, nogil=True, inline="always")
+def _quantize_exact(x, qf: int, w: int, signed: bool, rnd: int, ovf: int):  # noqa: PLR0913
+    """Quantize an integer input exactly: return the int64 stored integer of x * 2**qf."""
+    x = np.int64(x)
+    if qf < 0:
+        return _apply_overflow(_round_shift_right(x, -qf, rnd), w, signed, ovf)
+
+    # x * 2**qf is an integer: no rounding, only overflow.
+    if ovf == WRAP:
+        if qf >= w:
+            return np.int64(0)  # x * 2**qf is a multiple of 2**w
+        # The int64 shift wraps modulo 2**64, which keeps every bit WRAP keeps (w <= 64).
+        return _apply_overflow(x << qf, w, signed, WRAP)
+
+    # SAT / ERROR: decide on x itself, before shifting, as x << qf may not fit int64.
+    _, _, upper, lower = _width_params(signed, w)
+    s = min(qf, 63)  # x == 0 is the only in-range value when qf >= 64, and 0 << 63 == 0
+    hi = upper >> s  # floor(upper / 2**qf)
+    lo = lower >> qf if qf < w else np.int64(0)  # ceil(lower / 2**qf)
+    if ovf == SAT:
+        # Selects instead of branches, so array loops stay vectorizable.
+        n = upper if x > hi else (x << s)
+        return lower if x < lo else n
+    if x > hi or x < lo:
+        raise OverflowError(_OVERFLOW_ERROR)
+    return x << s
+
+
+@njit(cache=True, nogil=True)
+def _fxpt_int_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+    _check_modes(rnd, ovf)
+    return _quantize_exact(x, qf, qi + qf, signed, rnd, ovf) / _scale(qf)
+
+
+@njit(cache=True, nogil=True)
+def _fxpt_int_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+    """`_fxpt_array` for integer arrays (any dtype but uint64)."""
+    _check_modes(rnd, ovf)
+    w = qi + qf
+    _width_params(signed, w)
+    scale = _scale(qf)
+    out = np.empty(x.shape, dtype=np.float64)
+    flat = out.reshape(-1)
+    i = 0
+    for v in x.flat:
+        flat[i] = _quantize_exact(v, qf, w, signed, rnd, ovf) / scale
+        i += 1
+    return out
+
+
+_INT64_LO = -(2**63)
+_INT64_HI = 2**63 - 1
+
+
+def _round_pyint(x: int, qf: int, rnd: int) -> int:
+    """Exact rounding of x * 2**qf for a Python int of any size (no overflow handling)."""
+    if qf >= 0:
+        return x << qf
+    k = -qf
+    q, rem = divmod(x, 1 << k)  # floor division: rem in [0, 2**k)
+    half = 1 << (k - 1)
+    inc = {
+        TRUNC: False,
+        CEIL: rem != 0,
+        TO_ZERO: rem != 0 and q < 0,
+        AWAY: rem != 0 and q >= 0,
+        HALF_UP: rem >= half,
+        HALF_DOWN: rem > half,
+        HALF_EVEN: rem > half or (rem == half and q % 2 == 1),
+        HALF_ZERO: rem > half or (rem == half and q < 0),
+        HALF_AWAY: rem > half or (rem == half and q >= 0),
+    }[rnd]
+    return q + inc
+
+
+def _quantize_pyint(x: int, qi: int, qf: int, signed: bool, rnd: int, ovf: int) -> int:  # noqa: PLR0913
+    """Exact stored integer for a Python int of any size (the slow path for values outside int64)."""
+    spec = FxpSpec(qi, qf, signed, rnd, ovf)
+    _check_width(signed, spec.width)
+    n = _round_pyint(x, qf, rnd)
+    lo, hi = spec.min_int, spec.max_int
+    if lo <= n <= hi:
+        return n
+    if ovf == WRAP:
+        return (n - lo) % (1 << spec.width) + lo
+    if ovf == SAT:
+        return hi if n > hi else lo
+    raise OverflowError(_OVERFLOW_ERROR)
+
+
+def _is_int_array(x: np.ndarray) -> bool:
+    """True for integer and bool arrays, which are quantized exactly."""
+    return x.dtype.kind in "iub"
+
+
+def _int_array_input(x: np.ndarray) -> np.ndarray | None:
+    """Return an integer array the int64 kernels can take, or None if it needs the slow path.
+
+    uint64 arrays with values >= 2**63 don't fit int64, and object arrays hold Python
+    ints of any size: both return None.
+    """
+    if x.dtype == object:
+        return None
+    if x.dtype == np.uint64:
+        if x.size and x.max() > _INT64_HI:
+            return None
+        return x.astype(np.int64)
+    return x
+
+
+def _as_array(x: list | tuple) -> np.ndarray:
+    """Convert a list or tuple input: integer lists stay integer (exact), anything else is float64."""
+    arr = np.asarray(x)
+    if _is_int_array(arr):
+        return arr
+    if arr.dtype == np.float64 or arr.dtype == object:
+        # NumPy turns ints that don't share one integer dtype into float64 (e.g. -1 and
+        # 2**63) or object (beyond uint64). Keep them as Python ints, quantized one by one.
+        obj = np.asarray(x, dtype=object)
+        if obj.size and all(isinstance(v, int | np.integer) for v in obj.flat):
+            return obj
+    return arr if arr.dtype == np.float64 else np.asarray(x, dtype=np.float64)
+
+
+def _int_slow_path(x: np.ndarray, qi: int, qf: int, signed: bool, rnd: int, ovf: int) -> np.ndarray:  # noqa: PLR0913
+    """Stored integers (int64 array) of an integer array with values outside the int64 range."""
+    out = np.empty(x.shape, dtype=np.int64)
+    flat = out.reshape(-1)
+    for i, v in enumerate(x.flat):
+        flat[i] = _quantize_pyint(int(v), qi, qf, signed, rnd, ovf)
+    return out
+
+
+def _int_to_int(x, qi: int, qf: int, signed: bool, rnd: int, ovf: int):  # noqa: PLR0913
+    """Stored integer(s) of an integer input: a Python int for a scalar, an int64 array otherwise.
+
+    `x` is a Python int or an integer / object array; the modes must be validated.
+    """
+    if isinstance(x, int):
+        if _INT64_LO <= x <= _INT64_HI:
+            return int(_to_int_int_scalar(x, qi, qf, signed, rnd, ovf))
+        return _quantize_pyint(x, qi, qf, signed, rnd, ovf)
+    a = _int_array_input(x)
+    if a is not None:
+        return _to_int_int_array(a, qi, qf, signed, rnd, ovf)
+    return _int_slow_path(x, qi, qf, signed, rnd, ovf)
+
+
+def _int_to_float(x, qi: int, qf: int, signed: bool, rnd: int, ovf: int):  # noqa: PLR0913
+    """`fxpt` of an integer input (see `_int_to_int`)."""
+    if isinstance(x, int):
+        if _INT64_LO <= x <= _INT64_HI:
+            return float(_fxpt_int_scalar(x, qi, qf, signed, rnd, ovf))
+        return float(_from_int_scalar(_quantize_pyint(x, qi, qf, signed, rnd, ovf), qi, qf, signed, WRAP))
+    a = _int_array_input(x)
+    if a is not None:
+        return _fxpt_int_array(a, qi, qf, signed, rnd, ovf)
+    return _from_int_array(_int_slow_path(x, qi, qf, signed, rnd, ovf), qi, qf, signed, WRAP)
+
+
 @njit(cache=True, nogil=True)
 def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     """Quantize an array of any shape in one pass: one read and one write per element."""
@@ -688,6 +898,27 @@ def _to_int_array(x, qi: int, qf: int, signed: bool, rnd: int, ovf: int):  # noq
 
 
 @njit(cache=True, nogil=True)
+def _to_int_int_scalar(x, qi: int, qf: int, signed: bool, rnd: int, ovf: int):  # noqa: PLR0913
+    _check_modes(rnd, ovf)
+    return _quantize_exact(x, qf, qi + qf, signed, rnd, ovf)
+
+
+@njit(cache=True, nogil=True)
+def _to_int_int_array(x, qi: int, qf: int, signed: bool, rnd: int, ovf: int):  # noqa: PLR0913
+    """`_to_int_array` for integer arrays (any dtype but uint64)."""
+    _check_modes(rnd, ovf)
+    w = qi + qf
+    _width_params(signed, w)
+    out = np.empty(x.shape, dtype=np.int64)
+    flat = out.reshape(-1)
+    i = 0
+    for v in x.flat:
+        flat[i] = _quantize_exact(v, qf, w, signed, rnd, ovf)
+        i += 1
+    return out
+
+
+@njit(cache=True, nogil=True)
 def _from_int_array(n, qi: int, qf: int, signed: bool, ovf: int):
     _check_modes(0, ovf)
     w = qi + qf
@@ -716,6 +947,10 @@ def _overflow_error(x, qi: int, qf: int, signed: bool, rnd: int) -> OverflowErro
     """
     spec = FxpSpec(qi, qf, signed, rnd, ERROR)
     lo, hi = spec.min_int, spec.max_int
+    if isinstance(x, list | tuple):
+        x = _as_array(x)
+    if isinstance(x, int | np.integer) or (isinstance(x, np.ndarray) and (_is_int_array(x) or x.dtype == object)):
+        return _int_overflow_error(np.asarray(x), spec)
     arr = np.asarray(x, dtype=np.float64)
     flat = np.where(np.isnan(arr), 0.0, arr).reshape(-1)  # NaN never overflows
     wide = _to_int_array(flat, MAX_WIDTH_SIGNED - qf, qf, True, rnd, SAT)
@@ -730,6 +965,22 @@ def _overflow_error(x, qi: int, qf: int, signed: bool, rnd: int) -> OverflowErro
         return OverflowError(f"{first!r} is out of range: {rng}")
     index = ", ".join(str(int(i)) for i in np.unravel_index(bad[0], arr.shape))
     count = f" ({bad.size} values out of range)" if bad.size > 1 else ""
+    return OverflowError(f"x[{index}] = {first!r} is out of range{count}: {rng}")
+
+
+def _int_overflow_error(arr: np.ndarray, spec: FxpSpec) -> OverflowError:
+    """`_overflow_error` for integer inputs, found with exact Python-int arithmetic."""
+    lo, hi = spec.min_int, spec.max_int
+    values = [int(v) for v in arr.flat]
+    bad = [i for i, v in enumerate(values) if not lo <= _round_pyint(v, spec.qf, spec.rnd) <= hi]
+    rng = f"the range of {spec!r} is [{spec.min!r}, {spec.max!r}]"
+    if not bad:  # pragma: no cover (the kernel raised, so some value overflows)
+        return OverflowError(f"value out of range: {rng}")
+    first = values[bad[0]]
+    if arr.ndim == 0:
+        return OverflowError(f"{first!r} is out of range: {rng}")
+    index = ", ".join(str(int(i)) for i in np.unravel_index(bad[0], arr.shape))
+    count = f" ({len(bad)} values out of range)" if len(bad) > 1 else ""
     return OverflowError(f"x[{index}] = {first!r} is out of range{count}: {rng}")
 
 
@@ -809,25 +1060,65 @@ def fxpt(  # noqa: PLR0913
     rnd, ovf = _validated_modes(rnd, ovf)
     try:  # free when nothing is raised; a function call here would cost ~50 ns
         if isinstance(x, np.ndarray):
+            if _is_int_array(x):
+                return _int_to_float(x, qi, qf, signed, rnd, ovf)
             return _fxpt_array(x, qi, qf, signed, rnd, ovf)
 
-        if isinstance(x, float | int | np.integer | np.floating):
-            # float() gives one compiled specialization for every scalar type (and handles
+        if isinstance(x, float | np.floating):
+            # float() gives one compiled specialization for every float type (and handles
             # float16, which Numba can't type); the scaling step converts to float anyway.
             # float(): with NUMBA_DISABLE_JIT=1 the kernel returns np.float64
             return float(_fxpt_scalar(float(x), qi, qf, signed, rnd, ovf))
 
+        if isinstance(x, int | np.integer):  # exact, in integer arithmetic
+            return _int_to_float(int(x), qi, qf, signed, rnd, ovf)
+
         if isinstance(x, list | tuple):
-            return _fxpt_array(np.asarray(x, dtype=np.float64), qi, qf, signed, rnd, ovf)
+            arr = _as_array(x)
+            if arr.dtype == np.float64:
+                return _fxpt_array(arr, qi, qf, signed, rnd, ovf)
+            return _int_to_float(arr, qi, qf, signed, rnd, ovf)
     except OverflowError:
         raise _overflow_error(x, qi, qf, signed, rnd) from None
 
     raise TypeError(f"Unsupported type: {x}")
 
 
+def _is_exact_int_type(t) -> bool:
+    """Numba types quantized with the exact integer kernels: every integer type but uint64.
+
+    uint64 values >= 2**63 don't fit the int64 kernels, so inside @njit code uint64
+    inputs keep the float64 path (from Python they are handled exactly).
+    """
+    if isinstance(t, types.Boolean):
+        return True
+    return isinstance(t, types.Integer) and (t.signed or t.bitwidth < 64)  # noqa: PLR2004
+
+
 # Numba's overload is used to decide when to call the array or the scalar function.
 @overload(fxpt, inline="always")
-def fxp_overload(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913, ARG001
+def fxp_overload(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913, ARG001, C901
+    if isinstance(x, types.Array) and _is_exact_int_type(x.dtype):
+
+        def impl(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+            return _fxpt_int_array(x, qi, qf, signed, rnd, ovf)  # pragma: no cover
+
+        return impl
+
+    if _is_exact_int_type(x) and not isinstance(x, types.Boolean):
+
+        def impl(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+            return _fxpt_int_scalar(x, qi, qf, signed, rnd, ovf)  # pragma: no cover
+
+        return impl
+
+    if isinstance(x, types.List | types.UniTuple) and _is_exact_int_type(x.dtype):
+
+        def impl(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+            return _fxpt_int_array(np.asarray(x), qi, qf, signed, rnd, ovf)  # pragma: no cover
+
+        return impl
+
     # Array case
     if isinstance(x, types.Array):
 

@@ -31,11 +31,17 @@ from ._pyfxp import (
     ArrayLike,
     FxpSpec,
     Scalar,
+    _as_array,
     _check_width,
+    _int_to_int,
+    _is_exact_int_type,
+    _is_int_array,
     _overflow_error,
     _from_int_array,
     _from_int_scalar,
     _to_int_array,
+    _to_int_int_array,
+    _to_int_int_scalar,
     _to_int_scalar,
     _validated_modes,
 )
@@ -71,7 +77,10 @@ def to_int(x: Scalar | ArrayLike, spec: FxpSpec):
 
     The stored integer `n` and the real value `y = fxp(x, spec)` are related by
     `y = n * 2**-qf`. Unlike the float result, `n` is exact for every supported
-    width (up to 64 bits signed / 63 bits unsigned).
+    width (up to 64 bits signed / 63 bits unsigned). Integer inputs (Python ints
+    of any size, NumPy integer scalars and arrays, integer lists) are quantized
+    in integer arithmetic, so they are not rounded to float64 first. Inside
+    `@njit` code, uint64 inputs are the exception: they are converted to float64.
 
     Parameters
     ----------
@@ -102,15 +111,24 @@ def to_int(x: Scalar | ArrayLike, spec: FxpSpec):
     -21
     >>> to_int([0.5, -0.5], spec)
     array([ 8, -8])
+    >>> to_int(2**58 + 1, Q(60, 0))  # integers above 2**53 stay exact
+    288230376151711745
     """
     rnd, ovf = _validated_modes(spec.rnd, spec.ovf)
     try:
         if isinstance(x, np.ndarray):
+            if _is_int_array(x):
+                return _int_to_int(x, spec.qi, spec.qf, spec.signed, rnd, ovf)
             return _to_int_array(x, spec.qi, spec.qf, spec.signed, rnd, ovf)
-        if isinstance(x, float | int | np.integer | np.floating):
+        if isinstance(x, float | np.floating):
             return int(_to_int_scalar(float(x), spec.qi, spec.qf, spec.signed, rnd, ovf))
+        if isinstance(x, int | np.integer):  # exact, in integer arithmetic
+            return _int_to_int(int(x), spec.qi, spec.qf, spec.signed, rnd, ovf)
         if isinstance(x, list | tuple):
-            return _to_int_array(np.asarray(x, dtype=np.float64), spec.qi, spec.qf, spec.signed, rnd, ovf)
+            arr = _as_array(x)
+            if arr.dtype == np.float64:
+                return _to_int_array(arr, spec.qi, spec.qf, spec.signed, rnd, ovf)
+            return _int_to_int(arr, spec.qi, spec.qf, spec.signed, rnd, ovf)
     except OverflowError:
         raise _overflow_error(x, spec.qi, spec.qf, spec.signed, rnd) from None
     raise TypeError(f"Unsupported type: {x}")
@@ -312,6 +330,25 @@ def from_hex(s, spec: FxpSpec):
 @overload(to_int, inline="always")
 def _to_int_overload(x, spec):
     """Make `to_int` callable from user @njit code."""
+    if isinstance(x, types.Array) and _is_exact_int_type(x.dtype):
+
+        def impl(x, spec):
+            return _to_int_int_array(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)  # pragma: no cover
+
+        return impl
+    if _is_exact_int_type(x) and not isinstance(x, types.Boolean):
+
+        def impl(x, spec):
+            return _to_int_int_scalar(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)  # pragma: no cover
+
+        return impl
+    if isinstance(x, types.List | types.UniTuple) and _is_exact_int_type(x.dtype):
+
+        def impl(x, spec):
+            a = np.asarray(x)  # pragma: no cover
+            return _to_int_int_array(a, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)  # pragma: no cover
+
+        return impl
     if isinstance(x, types.Array):
 
         def impl(x, spec):

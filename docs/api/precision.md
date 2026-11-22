@@ -13,8 +13,11 @@ formats, a result can be rounded to the nearest float64. This applies to:
 - `FxpSpec.min` and `FxpSpec.max` (`min_int` and `max_int` stay exact).
 
 Float inputs carry at most 53 significant bits, so `fxp` of a float only loses bits when the
-stored integer comes from **WRAP or SAT of a large value**. Integer inputs are converted to
-float64 first, so **integers above `2**53`** are rounded before they are quantized.
+stored integer comes from **WRAP or SAT of a large value**. Integer inputs (Python ints of any
+size, NumPy integer scalars and arrays, integer lists) are quantized exactly, in integer
+arithmetic: for an **integer above `2**53`**, the stored integer is exact and only the returned
+float is rounded. Inside `@njit` code, uint64 inputs are the exception: they are converted to
+float64 first.
 
 ```python
 >>> from pyfxp import Q, fxp, to_int, to_hex
@@ -26,8 +29,10 @@ float64 first, so **integers above `2**53`** are rounded before they are quantiz
 9223372036854775807
 >>> to_hex(1e30, spec)
 '7fffffffffffffff'
->>> fxp(2**58 + 1, Q(60, 0)) == 2**58 # the input is rounded to float64 first
+>>> fxp(2**58 + 1, Q(60, 0)) == 2**58 # the float result is rounded
 True
+>>> to_int(2**58 + 1, Q(60, 0))       # the stored integer is exact
+288230376151711745
 
 ```
 
