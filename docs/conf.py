@@ -117,6 +117,8 @@ _KEY_FACTS = """\
   `fxpt(x, qi, qf, signed, rnd, ovf)` does the same without a spec.
 - Q format is ARM style: `qi` includes the sign bit. `Q(1, 15)` is a 16-bit signed fraction in [-1, 1).
 - Results are floats / float64 arrays on the 2**-qf grid, not a custom type. Arrays of any shape work.
+- Complex inputs (`fxp`, `fxpt`): real and imaginary parts are quantized separately with the same spec and
+  return complex / complex128. `to_int`, `to_bin`, `to_hex` reject complex: convert `z.real` and `z.imag`.
 - Modes live in `pyfxp.constants`: rounding `TRUNC, CEIL, TO_ZERO, AWAY, HALF_UP, HALF_DOWN, HALF_EVEN,
   HALF_ZERO, HALF_AWAY`; overflow `WRAP, SAT, ERROR`. They are IntEnums (`Rounding`, `Overflow`).
 - Widths up to 64 bits (signed) / 63 bits (unsigned). NaN propagates; +-inf saturates with SAT.
@@ -129,6 +131,8 @@ _AUTODOC = re.compile(r"```\{eval-rst\}\n\.\. auto(function|class|module):: (\S+
 
 
 _SIGNATURE_NAMES = {
+    "float | int | numpy.integer | numpy.floating | complex | numpy.complexfloating | numpy.ndarray | "
+    "collections.abc.Sequence[float]": "Scalar | ComplexScalar | ArrayLike",
     "float | int | numpy.integer | numpy.floating | numpy.ndarray | collections.abc.Sequence[float]": "Scalar | ArrayLike",
     "int | numpy.integer": "int",
     "pyfxp._pyfxp.FxpSpec": "FxpSpec",

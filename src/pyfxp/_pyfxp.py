@@ -53,8 +53,11 @@ RND_MIDPOINT = 0.5  # Threshold for half-way rounding
 Scalar: TypeAlias = float | int | np.integer | np.floating
 """Scalar inputs: Python and NumPy integers and floats. They return a float."""
 
+ComplexScalar: TypeAlias = complex | np.complexfloating
+"""Complex scalar inputs (`fxp` and `fxpt` only). They return a complex."""
+
 ArrayLike: TypeAlias = np.ndarray | Sequence[float]
-"""Array inputs: NumPy arrays, lists and tuples. They return a float64 ndarray."""
+"""Array inputs: NumPy arrays, lists and tuples. They return a float64 ndarray (complex128 for complex inputs)."""
 _TWO_63 = 2.0**63  # first float64 outside the int64 range
 
 
@@ -399,7 +402,9 @@ def Q(qi: int, qf: int, signed: bool = True, rnd: int | np.integer = TRUNC, ovf:
     return FxpSpec(qi, qf, signed, rnd, ovf)
 
 
-def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndarray for arrays (see Returns)
+def fxp(
+    x: Scalar | ComplexScalar | ArrayLike, spec: FxpSpec
+) -> Any:  # float for scalars, ndarray for arrays (see Returns)
     """Convert a numeric value to fixed-point representation using a pre-defined fixed-point specification.
 
     This function behaves like `fxpt`, but instead of requiring multiple
@@ -410,8 +415,9 @@ def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndar
 
     Parameters
     ----------
-    x : int, float or array-like
-        The input value(s) to convert.
+    x : int, float, complex or array-like
+        The input value(s) to convert. The real and imaginary parts of complex
+        inputs are quantized separately, both with `spec`.
 
     spec : FxpSpec or tuple
         A fixed-point specification (usually created with `Q`) with the fields:
@@ -424,8 +430,9 @@ def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndar
 
     Returns
     -------
-    float or ndarray
-        Fixed-point representation of the input value(s).
+    float, complex or ndarray
+        Fixed-point representation of the input value(s): complex (complex128)
+        for complex inputs.
 
     Raises
     ------
@@ -454,6 +461,8 @@ def fxp(x: Scalar | ArrayLike, spec: FxpSpec) -> Any:  # float for scalars, ndar
     >>> Q3_4T = Q(3, 4, signed=True, rnd=TRUNC, ovf=WRAP)  # Q3.4 format (3 integer bits, 4 fractional bits)
     >>> fxp(math.pi, Q3_4T)
     3.125
+    >>> fxp(complex(math.pi, -math.e), Q3_4T)  # real and imaginary parts separately
+    (3.125-2.75j)
     """
     return fxpt(x, spec.qi, spec.qf, spec.signed, spec.rnd, spec.ovf)
 
@@ -791,10 +800,12 @@ def _int_array_input(x: np.ndarray) -> np.ndarray | None:
 
 
 def _as_array(x: list | tuple) -> np.ndarray:
-    """Convert a list or tuple input: integer lists stay integer (exact), anything else is float64."""
+    """Convert a list or tuple input: integer lists stay integer (exact), complex ones complex128, anything else float64."""
     arr = np.asarray(x)
     if _is_int_array(arr):
         return arr
+    if arr.dtype.kind == "c":
+        return arr.astype(np.complex128, copy=False)
     if arr.dtype == np.float64 or arr.dtype == object:
         # NumPy turns ints that don't share one integer dtype into float64 (e.g. -1 and
         # 2**63) or object (beyond uint64). Keep them as Python ints, quantized one by one.
@@ -861,6 +872,31 @@ def _fxpt_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP): 
 def _fxpt_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
     _check_modes(rnd, ovf)
     return _quantize(x, _scale(qf), qi + qf, signed, rnd, ovf)
+
+
+@njit(cache=True, nogil=True)
+def _fxpt_complex_array(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+    """Quantize a complex array: the real and imaginary parts separately, with the same format."""
+    _check_modes(rnd, ovf)
+    w = qi + qf
+    _width_params(signed, w)  # validate the width once, also for empty arrays
+    scale = _scale(qf)
+
+    out = np.empty(x.shape, dtype=np.complex128)
+    flat = out.reshape(-1)
+    i = 0
+    for v in x.flat:
+        flat[i] = complex(_quantize(v.real, scale, w, signed, rnd, ovf), _quantize(v.imag, scale, w, signed, rnd, ovf))
+        i += 1
+    return out
+
+
+@njit(cache=True, nogil=True, inline="always")
+def _fxpt_complex_scalar(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+    _check_modes(rnd, ovf)
+    scale = _scale(qf)
+    w = qi + qf
+    return complex(_quantize(x.real, scale, w, signed, rnd, ovf), _quantize(x.imag, scale, w, signed, rnd, ovf))
 
 
 # Raw-integer kernels (used by pyfxp._raw). They live in this file because Numba's
@@ -951,21 +987,49 @@ def _overflow_error(x, qi: int, qf: int, signed: bool, rnd: int) -> OverflowErro
         x = _as_array(x)
     if isinstance(x, int | np.integer) or (isinstance(x, np.ndarray) and (_is_int_array(x) or x.dtype == object)):
         return _int_overflow_error(np.asarray(x), spec)
+    rng = f"the range of {spec!r} is [{spec.min!r}, {spec.max!r}]"
+    if isinstance(x, complex | np.complexfloating) or (isinstance(x, np.ndarray) and x.dtype.kind == "c"):
+        carr = np.asarray(x, dtype=np.complex128)
+        cflat = carr.reshape(-1)
+        bad_re = _overflowing(cflat.real, lo, hi, qf, rnd)
+        bad_im = _overflowing(cflat.imag, lo, hi, qf, rnd)
+        bad = np.flatnonzero(bad_re | bad_im)
+        if bad.size == 0:  # pragma: no cover (the kernel raised, so some value overflows)
+            return OverflowError(f"value out of range: {rng}")
+        k = bad[0]
+        part = {(True, False): "real part", (False, True): "imaginary part"}.get(
+            (bool(bad_re[k]), bool(bad_im[k])), "real and imaginary parts"
+        )
+        return _located_error(complex(cflat[k]), part, carr.shape, k, bad.size, rng)
     arr = np.asarray(x, dtype=np.float64)
-    flat = np.where(np.isnan(arr), 0.0, arr).reshape(-1)  # NaN never overflows
+    bad = np.flatnonzero(_overflowing(arr.reshape(-1), lo, hi, qf, rnd))
+    if bad.size == 0:  # pragma: no cover (the kernel raised, so some value overflows)
+        return OverflowError(f"value out of range: {rng}")
+    return _located_error(float(arr.reshape(-1)[bad[0]]), "", arr.shape, bad[0], bad.size, rng)
+
+
+def _overflowing(flat: np.ndarray, lo: int, hi: int, qf: int, rnd: int) -> np.ndarray:
+    """Boolean mask of the float64 values in `flat` that quantize outside [lo, hi]."""
+    flat = np.where(np.isnan(flat), 0.0, flat)  # NaN never overflows
     wide = _to_int_array(flat, MAX_WIDTH_SIGNED - qf, qf, True, rnd, SAT)
     limit = math.ldexp(1.0, 63 - qf)  # outside the int64 range: overflows every format, even 64-bit
     huge = (flat >= limit) | (flat < -limit)
-    bad = np.flatnonzero((wide < lo) | (wide > hi) | huge)
-    rng = f"the range of {spec!r} is [{spec.min!r}, {spec.max!r}]"
-    if bad.size == 0:  # pragma: no cover (the kernel raised, so some value overflows)
-        return OverflowError(f"value out of range: {rng}")
-    first = float(flat[bad[0]])
-    if arr.ndim == 0:
-        return OverflowError(f"{first!r} is out of range: {rng}")
-    index = ", ".join(str(int(i)) for i in np.unravel_index(bad[0], arr.shape))
-    count = f" ({bad.size} values out of range)" if bad.size > 1 else ""
-    return OverflowError(f"x[{index}] = {first!r} is out of range{count}: {rng}")
+    return (wide < lo) | (wide > hi) | huge
+
+
+def _located_error(first, part: str, shape: tuple, k, nbad: int, rng: str) -> OverflowError:  # noqa: PLR0913
+    """OverflowError naming the first bad value, its index (arrays only) and, for complex values, the part."""
+    notes = [part] if part else []
+    if len(shape) == 0:
+        return OverflowError(f"{first!r} is out of range{_paren(notes)}: {rng}")
+    index = ", ".join(str(int(i)) for i in np.unravel_index(k, shape))
+    if nbad > 1:
+        notes.append(f"{nbad} values out of range")
+    return OverflowError(f"x[{index}] = {first!r} is out of range{_paren(notes)}: {rng}")
+
+
+def _paren(notes: list[str]) -> str:
+    return f" ({'; '.join(notes)})" if notes else ""
 
 
 def _int_overflow_error(arr: np.ndarray, spec: FxpSpec) -> OverflowError:
@@ -985,14 +1049,15 @@ def _int_overflow_error(arr: np.ndarray, spec: FxpSpec) -> OverflowError:
 
 
 def fxpt(  # noqa: PLR0913
-    x: Scalar | ArrayLike, qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP
+    x: Scalar | ComplexScalar | ArrayLike, qi: int, qf: int, signed: bool = True, rnd: int = TRUNC, ovf: int = WRAP
 ) -> Any:  # float for scalars, ndarray for arrays (see Returns)
     """Convert a numeric value to fixed-point representation using Q-format notation.
 
     Parameters
     ----------
-    x : int, float or array-like
-        The input value(s) to convert.
+    x : int, float, complex or array-like
+        The input value(s) to convert. The real and imaginary parts of complex
+        inputs are quantized separately, with the same format.
     qi : int
         Number of integer bits (including sign bit if signed=True).
     qf : int
@@ -1025,9 +1090,10 @@ def fxpt(  # noqa: PLR0913
 
     Returns
     -------
-    float or ndarray
+    float, complex or ndarray
         The quantized value(s), as float(s) on the `2**-qf` grid: a float for
-        scalar inputs, a float64 array for array, list and tuple inputs.
+        scalar inputs, a float64 array for array, list and tuple inputs. Complex
+        inputs give a complex, or a complex128 array.
 
     Raises
     ------
@@ -1046,6 +1112,8 @@ def fxpt(  # noqa: PLR0913
     - NaN is returned unchanged, for every rounding and overflow mode.
     - ±inf saturates to the max/min value with SAT, raises with ERROR,
       and returns NaN with WRAP (an infinite value has no defined wrap).
+    - For complex inputs, each rule applies to the real and imaginary parts
+      separately: `complex(nan, 0.3)` keeps its NaN real part.
 
     Examples
     --------
@@ -1062,6 +1130,8 @@ def fxpt(  # noqa: PLR0913
         if isinstance(x, np.ndarray):
             if _is_int_array(x):
                 return _int_to_float(x, qi, qf, signed, rnd, ovf)
+            if x.dtype.kind == "c":
+                return _fxpt_complex_array(x, qi, qf, signed, rnd, ovf)
             return _fxpt_array(x, qi, qf, signed, rnd, ovf)
 
         if isinstance(x, float | np.floating):
@@ -1073,10 +1143,16 @@ def fxpt(  # noqa: PLR0913
         if isinstance(x, int | np.integer):  # exact, in integer arithmetic
             return _int_to_float(int(x), qi, qf, signed, rnd, ovf)
 
+        if isinstance(x, complex | np.complexfloating):
+            # complex(): one compiled specialization (complex128) for every complex type
+            return complex(_fxpt_complex_scalar(complex(x), qi, qf, signed, rnd, ovf))
+
         if isinstance(x, list | tuple):
             arr = _as_array(x)
             if arr.dtype == np.float64:
                 return _fxpt_array(arr, qi, qf, signed, rnd, ovf)
+            if arr.dtype == np.complex128:
+                return _fxpt_complex_array(arr, qi, qf, signed, rnd, ovf)
             return _int_to_float(arr, qi, qf, signed, rnd, ovf)
     except OverflowError:
         raise _overflow_error(x, qi, qf, signed, rnd) from None
@@ -1116,6 +1192,27 @@ def fxp_overload(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):
 
         def impl(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
             return _fxpt_int_array(np.asarray(x), qi, qf, signed, rnd, ovf)  # pragma: no cover
+
+        return impl
+
+    if isinstance(x, types.Array) and isinstance(x.dtype, types.Complex):
+
+        def impl(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+            return _fxpt_complex_array(x, qi, qf, signed, rnd, ovf)  # pragma: no cover
+
+        return impl
+
+    if isinstance(x, types.Complex):
+
+        def impl(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+            return _fxpt_complex_scalar(x, qi, qf, signed, rnd, ovf)  # pragma: no cover
+
+        return impl
+
+    if isinstance(x, types.List | types.UniTuple) and isinstance(x.dtype, types.Complex):
+
+        def impl(x, qi: int, qf: int, signed: bool = True, rnd=TRUNC, ovf=WRAP):  # noqa: PLR0913
+            return _fxpt_complex_array(np.asarray(x), qi, qf, signed, rnd, ovf)  # pragma: no cover
 
         return impl
 

@@ -32,7 +32,7 @@ Baseline numbers come from `uv run inv bench`; the comparison with other librari
 - [ ] Format check `check(x, spec)` that raises if `x` isn't exactly representable in `spec`, behind a global switch that costs nothing when off. Catches forgotten quantization.
 - [x] Raw integer conversion `to_int(x, spec)` / `from_int(n, spec)`, plus `to_bin` / `to_hex` / `from_bin` / `from_hex` for HDL test vectors (#43).
 - [x] Rounding and overflow modes as `IntEnum`s: readable when printed, still usable inside Numba (#42).
-- [ ] Complex number support (quantize real and imaginary parts separately).
+- [x] Complex number support in `fxp` / `fxpt` (quantize real and imaginary parts separately). Raw conversion (`to_int`, `to_bin`, `to_hex`) of complex values is not supported yet.
 - [ ] Optional thin Python wrapper type that tracks its spec, for interactive exploration only. The core stays on plain floats (#44).
 
 ## Documentation
@@ -83,5 +83,5 @@ What still separates the package from a stable 1.0 (checked against `main`):
 New features are minor releases under SemVer, so these don't block 1.0:
 
 - Vectorize the array loop (Performance).
-- `check(x, spec)`, complex numbers, the spec-tracking wrapper type (#44) (API / user experience).
+- `check(x, spec)`, the spec-tracking wrapper type (#44) (API / user experience).
 - Python 3.14: add it to the CI matrix and classifiers once the minimum supported Numba version supports it.
