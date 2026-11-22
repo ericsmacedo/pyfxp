@@ -33,7 +33,7 @@ Baseline numbers come from `uv run inv bench`; the comparison with other librari
 - [x] Raw integer conversion `to_int(x, spec)` / `from_int(n, spec)`, plus `to_bin` / `to_hex` / `from_bin` / `from_hex` for HDL test vectors (#43).
 - [x] Rounding and overflow modes as `IntEnum`s: readable when printed, still usable inside Numba (#42).
 - [x] Complex number support in `fxp` / `fxpt` (quantize real and imaginary parts separately). Raw conversion (`to_int`, `to_bin`, `to_hex`) of complex values stays unsupported on purpose: they raise `TypeError`; convert `z.real` and `z.imag` separately, as any combined format (interleaved, packed) would be a guess at the HDL side.
-- ~~Optional thin Python wrapper type that tracks its spec, for interactive exploration only (#44).~~ Won't do: it works against the plain-float design, would not work inside `@njit` code, and would add public API under SemVer. Closed.
+- ~~Optional thin Python wrapper type that tracks its spec, for interactive exploration only (#44).~~ Won't do: the plain-float API covers the use cases, and a second way to model signals would add a large public API (Python type plus Numba overloads) under SemVer. Closed as not planned.
 
 ## Documentation
 
