@@ -15,6 +15,8 @@ and from 1.0 on the project follows [Semantic Versioning](https://semver.org/): 
   format, and return a `complex` or a complex128 array, also inside `@njit` code. NaN, ±inf and the
   overflow modes apply to each part, and `ERROR` messages name the part that overflows. `to_int`, `to_bin`
   and `to_hex` raise `TypeError` for complex inputs; convert `z.real` and `z.imag` separately.
+- **User guide: call pyfxp on arrays or inside `@njit` code.** A new section explains why a Python loop
+  with one call per sample is about 100–200× slower, and shows both fast ways.
 - **Python 3.14 support.** The minimum Numba version is now 0.63, the first with Python 3.14 wheels.
 
 ### Removed
