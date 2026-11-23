@@ -6,6 +6,8 @@ and from 1.0 on the project follows [Semantic Versioning](https://semver.org/): 
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-22
+
 ### Added
 
 - **Complex inputs to `fxp` and `fxpt`.** Python and NumPy complex scalars, complex arrays of any shape and
@@ -13,6 +15,15 @@ and from 1.0 on the project follows [Semantic Versioning](https://semver.org/): 
   format, and return a `complex` or a complex128 array, also inside `@njit` code. NaN, ±inf and the
   overflow modes apply to each part, and `ERROR` messages name the part that overflows. `to_int`, `to_bin`
   and `to_hex` raise `TypeError` for complex inputs; convert `z.real` and `z.imag` separately.
+- **User guide: call pyfxp on arrays or inside `@njit` code.** A new section explains why a Python loop
+  with one call per sample is about 100–200× slower, and shows both fast ways.
+- **Python 3.14 support.** The minimum Numba version is now 0.63, the first with Python 3.14 wheels.
+
+### Removed
+
+- **Python 3.10 support.** Python 3.10 reached end of life in October 2026; pyfxp now needs Python 3.11 or later.
+
+## [1.0.1] - 2026-11-22
 
 ### Fixed
 
@@ -71,5 +82,8 @@ First stable release. Code written for 0.2.1 keeps working, except for the point
 
 See the [GitHub releases](https://github.com/ericsmacedo/pyfxp/releases).
 
+[Unreleased]: https://github.com/ericsmacedo/pyfxp/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/ericsmacedo/pyfxp/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/ericsmacedo/pyfxp/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ericsmacedo/pyfxp/compare/v0.2.1...v1.0.0
 [0.2.1]: https://github.com/ericsmacedo/pyfxp/releases/tag/v0.2.1

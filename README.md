@@ -196,3 +196,47 @@ They are used by both `fxpt` and `fxp` to specify fixed-point arithmetic behavio
 > from pyfxp.constants import SAT, HALF_EVEN
 > fxpt(1.25, qi=3, qf=13, ovf=SAT, rnd=HALF_EVEN)
 > ```
+
+## Call pyfxp on arrays or inside `@njit` code
+
+Each call to `fxp` or `fxpt` from Python costs about 1 µs, almost all of it call overhead, so a
+Python loop that quantizes one sample per call runs at about 1 µs per sample. Do the same work in
+one of these two ways instead, at 5–15 ns per sample:
+
+- **On a whole array**, when the samples don't depend on each other:
+
+  ```python
+  import numpy as np
+  from pyfxp import fxp, Q
+
+  Q3_13 = Q(3, 13)
+  x = np.random.default_rng(0).uniform(-1, 1, 1_000_000)
+
+  y = fxp(x, Q3_13)                    # one call: ~5 ms
+
+  # y = [fxp(v, Q3_13) for v in x]     # one call per sample: ~1 s
+  ```
+
+- **Inside an `@njit` function**, when each sample depends on the previous ones (filters with
+  feedback, accumulators, control loops):
+
+  ```python
+  from numba import njit
+
+  ACC = Q(8, 13)
+
+  @njit
+  def integrate(x, spec):
+      y = np.empty_like(x)
+      acc = 0.0
+      for i in range(x.size):
+          acc = fxp(acc + x[i], spec)  # compiled: ~15 ns per sample
+          y[i] = acc
+      return y
+
+  y = integrate(fxp(x, Q3_13), ACC)
+  ```
+
+The `@njit` loop measures ~15 ns per sample rather than ~5 because each step waits for the previous
+result. Pass the spec into the compiled function as an argument, as above, or define it as a global
+constant.

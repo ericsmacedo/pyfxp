@@ -23,7 +23,7 @@ Baseline numbers come from `uv run inv bench`; the comparison with other librari
 - [x] Convert large arrays in a single loop instead of chained NumPy temporaries: 10–40 → ~5 ns/elem at 1M elements (#31).
 - [x] Remove the redundant `HALF_EVEN` special case (`np.round` already rounds ties to even) (#32, #33).
 - [x] Merge the duplicated scalar and array implementations (#31).
-- [ ] Vectorize the array loop (fast pass without checks, then fix up rare out-of-range / NaN elements) to approach 1 ns/elem.
+- [ ] Vectorize the array loop (fast pass without checks, then fix up rare out-of-range / NaN elements) to approach 1 ns/elem. Not needed now: deferred until a use case needs more than ~5 ns/elem.
 
 ## API / user experience
 
@@ -32,8 +32,8 @@ Baseline numbers come from `uv run inv bench`; the comparison with other librari
 - [ ] Format check `check(x, spec)` that raises if `x` isn't exactly representable in `spec`, behind a global switch that costs nothing when off. Catches forgotten quantization.
 - [x] Raw integer conversion `to_int(x, spec)` / `from_int(n, spec)`, plus `to_bin` / `to_hex` / `from_bin` / `from_hex` for HDL test vectors (#43).
 - [x] Rounding and overflow modes as `IntEnum`s: readable when printed, still usable inside Numba (#42).
-- [x] Complex number support in `fxp` / `fxpt` (quantize real and imaginary parts separately). Raw conversion (`to_int`, `to_bin`, `to_hex`) of complex values is not supported yet.
-- [ ] Optional thin Python wrapper type that tracks its spec, for interactive exploration only. The core stays on plain floats (#44).
+- [x] Complex number support in `fxp` / `fxpt` (quantize real and imaginary parts separately). Raw conversion (`to_int`, `to_bin`, `to_hex`) of complex values stays unsupported on purpose: they raise `TypeError`; convert `z.real` and `z.imag` separately, as any combined format (interleaved, packed) would be a guess at the HDL side.
+- ~~Optional thin Python wrapper type that tracks its spec, for interactive exploration only (#44).~~ Won't do: the plain-float API covers the use cases, and a second way to model signals would add a large public API (Python type plus Numba overloads) under SemVer. Closed as not planned.
 
 ## Documentation
 
@@ -44,7 +44,7 @@ Baseline numbers come from `uv run inv bench`; the comparison with other librari
 - [x] AI-friendly docs and repo: `llms.txt` / `llms-full.txt` with the full API reference, and `AGENTS.md` for coding agents (#53).
 - [x] Use one docstring style throughout: the docstrings and Sphinx (napoleon) use NumPy style, but `[tool.ruff.lint.pydocstyle]` says `google` (not enforced today, as no `D` rules are selected). Fixed in #54.
 - [x] Fix the `pyproject.toml` description typo ("library..") (#34).
-- [ ] Tell users to call pyfxp on arrays or inside `@njit` code: a pure-Python per-sample loop is ~200× slower (the front page and comparison in #51 cover it; the user guide should too).
+- [x] Tell users to call pyfxp on arrays or inside `@njit` code: a pure-Python per-sample loop is ~100–200× slower (the front page and comparison in #51 cover it; the user guide does too).
 
 ## Testing / CI
 
@@ -67,21 +67,21 @@ What still separates the package from a stable 1.0 (checked against `main`):
 - [x] Set `Development Status :: 5 - Production/Stable`.
 - [x] Docs URLs: everything (README, `pyproject.toml`, llms.txt) points to `/en/stable/`, the docs of the latest release. The Read the Docs `latest` build of the new Sphinx config works (Furo, `dirhtml` URLs, `llms.txt`); `stable` switches to it with the 1.0 tag.
 - [x] Overflow `ERROR` messages name the value, the format and the range (#56).
-- [ ] README as a front page like the docs, with the comparison (#60).
-- [ ] User guide: call pyfxp on arrays or inside `@njit` code (see Documentation).
-- [ ] Release dry run: build the sdist and wheel, and check the README on PyPI's renderer (GitHub alerts like `> [!NOTE]` show as plain quotes there; the chart shows only its light version).
+- [x] README as a front page like the docs, with the comparison (#60).
+- [x] User guide: call pyfxp on arrays or inside `@njit` code (see Documentation).
+- [x] Release dry run: build the sdist and wheel, and check the README on PyPI's renderer (GitHub alerts like `> [!NOTE]` show as plain quotes there; the chart shows only its light version). Done with the 1.0.0 and 1.0.1 releases.
 
 ### Release steps
 
 - [x] Replace `Unreleased` in `CHANGELOG.md` with the release date (#62).
-- [ ] Tag `v1.0.0` on `main` and publish to PyPI.
-- [ ] Check that Read the Docs builds `stable` from the tag with the Sphinx docs, so the `/en/stable/` links work (`llms.txt`, `comparison/`, `api/stability/` return 404 until then).
-- [ ] Check the PyPI page: README, classifiers, project links.
+- [x] Tag `v1.0.0` on `main` and publish to PyPI (1.0.1 followed with the exact integer inputs, #64).
+- [x] Check that Read the Docs builds `stable` from the tag with the Sphinx docs, so the `/en/stable/` links work (`llms.txt`, `comparison/`, `api/stability/` all return 200).
+- [x] Check the PyPI page: README, classifiers, project links.
 
 ### Deferred to after 1.0
 
 New features are minor releases under SemVer, so these don't block 1.0:
 
-- Vectorize the array loop (Performance).
-- `check(x, spec)`, the spec-tracking wrapper type (#44) (API / user experience).
-- Python 3.14: add it to the CI matrix and classifiers once the minimum supported Numba version supports it.
+- Vectorize the array loop (Performance); not needed now.
+- `check(x, spec)` (API / user experience). The spec-tracking wrapper type (#44) won't be done.
+- [x] Python 3.14 in the CI matrix and classifiers (needs Numba >= 0.63); Python 3.10 dropped (end of life in October 2026). In 1.1.0.
